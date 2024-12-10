@@ -2,7 +2,7 @@ import asyncio
 from typing import override
 
 from ...container import Container
-from .journal import MessageLogImpl
+from .journal import MessageLog
 from ...models import (
     AbstractBlockchainService,
     AbstractMessageService,
@@ -27,7 +27,7 @@ class Lightweight(BaseMessageConsumer, Consensus):
         blockchain_service: AbstractBlockchainService = Provide[Container.blockchain_service],
     ):
         super().__init__(message_queue)
-        self.messages = MessageLogImpl(blockchain_service.threshold)
+        self.messages = MessageLog()
         self.service = blockchain_service
         self.network = network_service
 
@@ -51,8 +51,9 @@ class Lightweight(BaseMessageConsumer, Consensus):
     @override
     async def receive_precommit(self, precommit: PrecommitMessage) -> None:
         # Check if the precommit is from a validator
-        # if not self.service.is_validator(precommit.pubkey):
-        #    raise ValueError("Invalid validator")
+        if not self.service.is_validator(precommit.pubkey):
+            logger.error(f"Precommit from non-validator {precommit.pubkey.hex()}")
+            return
 
         if not self.messages.add_precommit(precommit):
             logger.warning(f"Precommit already received {(precommit.hash or b'').hex()}")
@@ -60,15 +61,14 @@ class Lightweight(BaseMessageConsumer, Consensus):
 
         await self.network.broadcast_precommit(precommit)
         # We dont care about null precommits here
-        if not precommit.hash:
-            return
-
-        if self.messages.has_precommit_quorum(precommit.round, precommit.hash):
+        if precommit.hash and self.messages.has_precommit_quorum(
+            precommit.round, precommit.hash, self.service.threshold
+        ):
             cand = self.messages.get_candidate(precommit.hash)
             if cand:
                 logger.success(f"Committing block {cand.header.hash.hex()}")
                 self.service.update(cand)
-                self.messages = MessageLogImpl(self.service.threshold)
+                self.messages.reset()
 
             else:
                 logger.error(f"No candidate for precommit {precommit.hash.hex()} :(")

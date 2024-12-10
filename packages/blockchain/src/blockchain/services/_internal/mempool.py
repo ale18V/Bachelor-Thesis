@@ -25,8 +25,12 @@ class MempoolService(AbstractMempoolService):
     @override
     def rm(self, tx: Transaction) -> bool:
         txhash = hashlib.sha256(tx.SerializeToString(deterministic=True)).digest()
-        if txhash in self.mempool:
-            del self.mempool[txhash]
+        return self.rm_id(txhash)
+
+    @override
+    def rm_id(self, tx_id: bytes) -> bool:
+        if tx_id in self.mempool:
+            del self.mempool[tx_id]
             return True
         return False
 

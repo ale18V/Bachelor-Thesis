@@ -9,8 +9,8 @@ class ValidationService(AbstractValidationService):
         pass
 
     @override
-    def validate_block(self, block: Block) -> bool:
-        return True
+    def validate_block(self, block: Block) -> list[Transaction]:
+        return list(filter(lambda tx: not self.validate_tx(tx), block.body.transactions))
 
     @override
     def validate_tx(self, tx: Transaction) -> bool:

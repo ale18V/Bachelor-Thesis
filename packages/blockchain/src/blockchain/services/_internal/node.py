@@ -47,11 +47,11 @@ class NodeService(object):
 
     def craft_block(self, height: int) -> Block:
         transactions = self.mempool.get()
-        for i, tx in enumerate(transactions):
-            if not self.validation.validate_tx(tx):
-                self.logger.warning(f"Invalid transaction in mempool: {tx}")
-                self.mempool.rm(tx)
-                transactions.pop(i)
+        # for i, tx in enumerate(transactions):
+        #     if not self.validation.validate_tx(tx):
+        #         self.logger.warning(f"Invalid transaction in mempool: {tx}")
+        #         self.mempool.rm(tx)
+        #         transactions.pop(i)
 
         body = BlockBody(
             transactions=transactions

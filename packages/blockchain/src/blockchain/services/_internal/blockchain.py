@@ -43,7 +43,15 @@ class BlockchainService(AbstractBlockchainService):
     @property
     def threshold(self) -> int:
         validators = len(self.validators)
-        return min(validators, round(2 * len(self.validators) / 3) + 1)
+        return min(validators, int(2 * len(self.validators) / 3) + 1)
+
+    @property
+    @override
+    def inv_threshold(self) -> int:
+        """
+        The minimum number of validators that would prevent a majority
+        """
+        return (len(self.validators) - self.threshold) + 1
 
     @property
     def height(self) -> int:

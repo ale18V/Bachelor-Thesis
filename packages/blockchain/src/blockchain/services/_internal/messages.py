@@ -4,6 +4,7 @@ from ...generated import peer_pb2
 from ...models import Message, AbstractMessageService
 import loguru
 
+
 class MessageService(AbstractMessageService):
     def __init__(self) -> None:
         self.queues: dict[int, asyncio.Queue[Message]] = {}

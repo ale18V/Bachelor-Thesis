@@ -98,51 +98,6 @@ class Commit(object):
         return isinstance(value, Commit) and self.pubkey == value.pubkey
 
 
-class MessageLog(ABC):
-
-    @abstractmethod
-    def count_prevotes_for(self, round: int, hash: bytes | None) -> int:
-        pass
-
-    @abstractmethod
-    def count_precommits_for(self, round: int, hash: bytes | None) -> int:
-        pass
-
-    @abstractmethod
-    def has_prevote_quorum(self, round: int, target: bytes | None) -> bool:
-        pass
-
-    @abstractmethod
-    def has_precommit_quorum(self, round: int, target: bytes | None) -> bool:
-        pass
-
-    @abstractmethod
-    def get_candidate(self, hash: bytes) -> Optional[peer_pb2.Block]:
-        pass
-
-    @abstractmethod
-    def add_message(
-        self, message: peer_pb2.PrecommitMessage | peer_pb2.PrevoteMessage | peer_pb2.ProposeBlockRequest
-    ) -> bool:
-        pass
-
-    @abstractmethod
-    def add_precommit(self, precommit: peer_pb2.PrecommitMessage) -> bool:
-        pass
-
-    @abstractmethod
-    def add_prevote(self, prevote: peer_pb2.PrevoteMessage) -> bool:
-        pass
-
-    @abstractmethod
-    def add_proposal(self, proposal: peer_pb2.ProposeBlockRequest) -> bool:
-        pass
-
-    @abstractmethod
-    def reset(self, threshold: int) -> None:
-        pass
-
-
 Message = peer_pb2.ProposeBlockRequest | peer_pb2.PrevoteMessage | peer_pb2.PrecommitMessage
 
 
@@ -211,6 +166,10 @@ class AbstractMempoolService(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def rm_id(self, tx_id: bytes) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     def add(self, tx: peer_pb2.Transaction) -> bool:
         raise NotImplementedError
 
@@ -223,6 +182,11 @@ class AbstractBlockchainService(ABC):
     @property
     @abstractmethod
     def threshold(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def inv_threshold(self) -> int:
         pass
 
     @property
@@ -265,7 +229,9 @@ class AbstractCryptoService(ABC):
         pass
 
     @abstractmethod
-    def sign_prevote(self, height: int, round: int, hash: bytes | None) -> peer_pb2.PrevoteMessage:
+    def sign_prevote(
+        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[bytes]]
+    ) -> peer_pb2.PrevoteMessage:
         pass
 
     @abstractmethod
@@ -283,7 +249,7 @@ class AbstractValidationService(ABC):
         pass
 
     @abstractmethod
-    def validate_block(self, block: peer_pb2.Block) -> bool:
+    def validate_block(self, block: peer_pb2.Block) -> list[peer_pb2.Transaction]:
         pass
 
 

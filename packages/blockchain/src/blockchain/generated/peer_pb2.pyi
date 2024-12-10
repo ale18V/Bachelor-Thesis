@@ -52,19 +52,21 @@ class ProposeBlockRequest(_message.Message):
         ...
 
 class PrevoteMessage(_message.Message):
-    __slots__ = ('hash', 'height', 'round', 'pubkey', 'signature')
+    __slots__ = ('hash', 'height', 'round', 'pubkey', 'signature', 'invalid_txs')
     HASH_FIELD_NUMBER: _ClassVar[int]
     HEIGHT_FIELD_NUMBER: _ClassVar[int]
     ROUND_FIELD_NUMBER: _ClassVar[int]
     PUBKEY_FIELD_NUMBER: _ClassVar[int]
     SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    INVALID_TXS_FIELD_NUMBER: _ClassVar[int]
     hash: bytes
     height: int
     round: int
     pubkey: bytes
     signature: bytes
+    invalid_txs: _containers.RepeatedScalarFieldContainer[bytes]
 
-    def __init__(self, hash: _Optional[bytes]=..., height: _Optional[int]=..., round: _Optional[int]=..., pubkey: _Optional[bytes]=..., signature: _Optional[bytes]=...) -> None:
+    def __init__(self, hash: _Optional[bytes]=..., height: _Optional[int]=..., round: _Optional[int]=..., pubkey: _Optional[bytes]=..., signature: _Optional[bytes]=..., invalid_txs: _Optional[_Iterable[bytes]]=...) -> None:
         ...
 
 class PrecommitMessage(_message.Message):
@@ -142,19 +144,17 @@ class BlockBody(_message.Message):
         ...
 
 class Transaction(_message.Message):
-    __slots__ = ('public_key', 'signature', 'timestamp', 'id', 'data')
+    __slots__ = ('public_key', 'signature', 'timestamp', 'data')
     PUBLIC_KEY_FIELD_NUMBER: _ClassVar[int]
     SIGNATURE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
-    ID_FIELD_NUMBER: _ClassVar[int]
     DATA_FIELD_NUMBER: _ClassVar[int]
     public_key: bytes
     signature: bytes
     timestamp: int
-    id: bytes
     data: TransactionData
 
-    def __init__(self, public_key: _Optional[bytes]=..., signature: _Optional[bytes]=..., timestamp: _Optional[int]=..., id: _Optional[bytes]=..., data: _Optional[_Union[TransactionData, _Mapping]]=...) -> None:
+    def __init__(self, public_key: _Optional[bytes]=..., signature: _Optional[bytes]=..., timestamp: _Optional[int]=..., data: _Optional[_Union[TransactionData, _Mapping]]=...) -> None:
         ...
 
 class TransactionData(_message.Message):

@@ -43,6 +43,7 @@ message PrevoteMessage {
   uint64 round = 6;
   bytes pubkey = 2;
   bytes signature = 3;
+  repeated bytes invalid_txs = 4;
 }
 
 message PrecommitMessage {

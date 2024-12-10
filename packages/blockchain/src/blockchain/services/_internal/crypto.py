@@ -1,3 +1,4 @@
+import hashlib
 import time
 from typing import Optional, override
 from blockchain.models import AbstractCryptoService
@@ -21,8 +22,15 @@ class CryptoService(AbstractCryptoService):
         return msg
 
     @override
-    def sign_prevote(self, height: int, round: int, hash: bytes | None) -> peer_pb2.PrevoteMessage:
-        msg = peer_pb2.PrevoteMessage(height=height, round=round, hash=hash)
+    def sign_prevote(
+        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[peer_pb2.Transaction]] = None
+    ) -> peer_pb2.PrevoteMessage:
+        invalid_txs_ids = (
+            [hashlib.sha256(tx.SerializeToString(deterministic=True)).digest() for tx in invalid_txs]
+            if invalid_txs
+            else []
+        )
+        msg = peer_pb2.PrevoteMessage(height=height, round=round, hash=hash, invalid_txs=invalid_txs_ids)
 
         msg.signature = self._kpriv.sign_deterministic(msg.SerializeToString(deterministic=True))
         msg.pubkey = self._kpub
