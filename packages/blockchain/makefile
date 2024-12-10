@@ -11,5 +11,5 @@ build:
 		--in-place \
 		--python-out $(OUT_DIR)/ \
   		protoc --proto-path=$(PROTO_DIR)/ \
-		--protoc-path "python3 -m grpcio_tools.protoc" \
+		--protoc-path "python3 -m grpc_tools.protoc" \
 		$(PROTO_DIR)/*.proto
