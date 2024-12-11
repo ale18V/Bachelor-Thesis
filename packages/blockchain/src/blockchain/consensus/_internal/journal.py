@@ -15,10 +15,10 @@ class MessageLog:
         self.tx_blacklist: dict[int, dict[bytes, int]] = {}
 
     def count_prevotes_for(self, round: int, hash: bytes | None) -> int:
-        return len(list(filter(lambda vote: vote.target == hash, self.prevotes[round])))
+        return len(list(filter(lambda vote: vote.target == hash, self.prevotes.get(round, []))))
 
     def count_precommits_for(self, round: int, hash: bytes | None) -> int:
-        return len(list(filter(lambda commit: commit.target == hash, self.precommits[round])))
+        return len(list(filter(lambda commit: commit.target == hash, self.precommits.get(round, []))))
 
     def add_message(self, message: Message) -> bool:
         if isinstance(message, peer_pb2.PrecommitMessage):
