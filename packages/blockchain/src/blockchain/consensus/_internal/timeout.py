@@ -19,13 +19,11 @@ class Timeout(Generic[P, R]):
         return await self.callback(*args, **kwargs)
 
 
-class TimeoutFactory:
+class TimeoutManager:
 
     def __init__(self, timeouts: dict[str, Timeout[[int, int], None]]) -> None:
         self.timeouts = timeouts
-        self.scheduled_timeouts: dict[str, dict[tuple[int, int], asyncio.Task[None]]] = dict.fromkeys(
-            timeouts.keys(), {}
-        )
+        self.scheduled_timeouts: dict[str, dict[tuple[int, int], asyncio.Task[None]]] = {k: {} for k in timeouts.keys()}
 
     def schedule(self, state: str, height: int, round: int) -> None:
         """Schedules a callback to be triggered after a timeout expires."""
@@ -35,13 +33,15 @@ class TimeoutFactory:
         @enqueue
         @after_timeout(timeout=timeout.duration, message=timeout.message)
         @loguru.logger.catch
-        async def __schedule() -> None:
+        async def __schedule(timeout: Timeout, height: int, round: int) -> None:
+            if timeout.message:
+                loguru.logger.info(timeout.message)
             await timeout(height, round)
             self.scheduled_timeouts[state].pop((height, round), None)
 
         if self.is_scheduled(state, height, round):
             return
-        self.scheduled_timeouts[state][(height, round)] = __schedule()
+        self.scheduled_timeouts[state][(height, round)] = __schedule(timeout, height, round)
 
     def is_scheduled(self, state: str, height: int, round: int) -> bool:
         return bool(self.scheduled_timeouts[state].get((height, round), False))
