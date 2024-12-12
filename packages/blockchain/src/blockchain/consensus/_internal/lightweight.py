@@ -35,7 +35,7 @@ class Lightweight(BaseMessageConsumer, Consensus):
     @override
     async def receive_proposal(self, proposal: ProposeBlockRequest) -> None:
         if not self.messages.add_proposal(proposal):
-            logger.warning(f"Proposal already received {proposal.block.header.hash.hex()}")
+            logger.debug(f"Proposal already received {proposal.block.header.hash.hex()}")
             return
         await self.network.broadcast_proposal(proposal)
 
@@ -45,7 +45,7 @@ class Lightweight(BaseMessageConsumer, Consensus):
         if self.messages.add_prevote(message):
             await self.network.broadcast_prevote(message)
             return
-        logger.warning(f"Prevote already received {(message.hash or b'').hex()}")
+        logger.debug(f"Prevote already received {(message.hash or b'').hex()}")
 
     @logger.catch
     @override
@@ -56,7 +56,7 @@ class Lightweight(BaseMessageConsumer, Consensus):
             return
 
         if not self.messages.add_precommit(precommit):
-            logger.warning(f"Precommit already received {(precommit.hash or b'').hex()}")
+            logger.debug(f"Precommit already received {(precommit.hash or b'').hex()}")
             return
 
         await self.network.broadcast_precommit(precommit)
@@ -74,7 +74,7 @@ class Lightweight(BaseMessageConsumer, Consensus):
                 logger.error(f"No candidate for precommit {precommit.hash.hex()} :(")
                 # TODO: Should sync here
         else:
-            logger.warning(
+            logger.debug(
                 f"No precommit quorum for {precommit.hash.hex()} {
                     self.messages.count_precommits_for(precommit.round, precommit.hash)
                     }"
