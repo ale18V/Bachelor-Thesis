@@ -6,7 +6,7 @@ import loguru
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.message import Message
 from blockchain.constants import GRACE_PERIOD, NUM_CONNECTED_PEERS, PING_TIMEOUT
-from blockchain.utils import after_timeout
+from blockchain.utils import after_timeout, get_tx_hash
 from blockchain.generated import peer_pb2_grpc, peer_pb2
 from blockchain.models import AbstractNetworkService, NetworkConfig
 
@@ -21,11 +21,13 @@ class NetworkService(AbstractNetworkService):
 
         self.logger = loguru.logger
 
-    def with_close(self, func: Callable[Concatenate["Connection", Message, ...], Coroutine[None, Any, Any]]):
+    def with_close(
+        self, func: Callable[Concatenate["Connection", ...], Coroutine[Any, Any, None]]
+    ) -> Callable[Concatenate["Connection", ...], Coroutine[Any, Any, None]]:
 
-        async def wrapper(connection: Connection, message: Message, *args, **kwargs: Any) -> None:
+        async def wrapper(connection: Connection, *args: Any, **kwargs: Any) -> None:
             try:
-                await func(connection, message, *args, **kwargs)
+                await func(connection, *args, **kwargs)
             except grpc.RpcError as err:
                 self.logger.error(f"Error sending message to {connection.destination}: {err}")
                 await self._close_connection(connection.destination)
@@ -96,28 +98,21 @@ class NetworkService(AbstractNetworkService):
         func: Callable[Concatenate["Connection", Message, ...], Coroutine[Any, Any, None]],
         message: Message,
         log: Optional[str] = None,
-    ) -> list[asyncio.Task[None]]:
+    ) -> None:
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(func(connection, message, timeout=5)) for connection in self.connections.values()]
+            for connection in self.connections.values():
+                tg.create_task(func(connection, message, timeout=5))
 
         if log:
             self.logger.info(log)
-        return tasks
-
-    def broadcast_prevote(self, request: peer_pb2.PrevoteMessage) -> Awaitable[None]:
-        @self.with_close
-        async def send_vote(connection: Connection, request: Any, **kwargs: Any) -> None:
-            await connection.AdvertisePrevote(request, **kwargs)
-
-        return self.loop.create_task(self._broadcast(send_vote, request))
 
     def broadcast_tx(self, tx: peer_pb2.Transaction) -> Awaitable[None]:
         @self.with_close
         async def send_tx(connection: Connection, tx: peer_pb2.Transaction, *args: Any, **kwargs: Any) -> None:
             await connection.AdvertiseTransaction(tx, *args, **kwargs)
 
-        return self.loop.create_task(self._broadcast(send_tx, tx, f"Broadcasted tx {tx.timestamp}"))
+        return self.loop.create_task(self._broadcast(send_tx, tx, f"Broadcasted tx {get_tx_hash(tx)}"))
 
     def broadcast_proposal(self, request: peer_pb2.ProposeBlockRequest) -> Awaitable[None]:
         @self.with_close
@@ -125,7 +120,18 @@ class NetworkService(AbstractNetworkService):
             await connection.ProposeBlock(request, **kwargs)
 
         return self.loop.create_task(
-            self._broadcast(send_block, request, f"Broadcasted block {request.block.header.hash.hex()}")
+            self._broadcast(send_block, request, f"Broadcasted block {request.block.header.hash.hex()[:8]}")
+        )
+
+    def broadcast_prevote(self, request: peer_pb2.PrevoteMessage) -> Awaitable[None]:
+        @self.with_close
+        async def send_vote(connection: Connection, request: Any, **kwargs: Any) -> None:
+            await connection.AdvertisePrevote(request, **kwargs)
+
+        return self.loop.create_task(
+            self._broadcast(
+                send_vote, request, f"Broadcasted prevote for {request.hash.hex()[:8] if request.hash else None}"
+            )
         )
 
     def broadcast_precommit(self, request: peer_pb2.PrecommitMessage) -> Awaitable[None]:
@@ -134,8 +140,21 @@ class NetworkService(AbstractNetworkService):
             await connection.AdvertisePrecommit(request, **kwargs)
 
         return self.loop.create_task(
-            self._broadcast(send_precommit, request, f"Broadcasted precommit {request.hash.hex()}")
+            self._broadcast(
+                send_precommit, request, f"Broadcasted precommit for {request.hash.hex()[:8] if request.hash else None}"
+            )
         )
+
+    @override
+    def broadcast_message(self, message: Message) -> Awaitable[None]:
+        if isinstance(message, peer_pb2.PrevoteMessage):
+            return self.broadcast_prevote(message)
+        elif isinstance(message, peer_pb2.PrecommitMessage):
+            return self.broadcast_precommit(message)
+        elif isinstance(message, peer_pb2.ProposeBlockRequest):
+            return self.broadcast_proposal(message)
+        else:
+            raise ValueError(f"Invalid message type: {type(message)}")
 
     async def get_blockchain(self) -> list[peer_pb2.Block]:
         if not self.connections:
@@ -166,7 +185,7 @@ class Connection(peer_pb2_grpc.NodeStub):
         self.logger.info(f"Starting connection to {self.destination}")
         res = await self.handshake()
         self.logger.debug(f"Handshake complete with {self.destination}")
-        self.keepalive = asyncio.get_running_loop().create_task(self._keepalive())
+        self.keepalive_task = asyncio.get_running_loop().create_task(self.keepalive())
         return res
 
     async def handshake(self) -> peer_pb2.RequestPeersResponse:
@@ -180,30 +199,30 @@ class Connection(peer_pb2_grpc.NodeStub):
 
         return peers_response
 
-    async def _keepalive(self) -> None:
-        @after_timeout(timeout=PING_TIMEOUT, message=f"Pinging {self.destination}")
-        async def ping() -> bool:
-            try:
-                await self.Ping(Empty(), timeout=10)
-                self.logger.success(f"Ping successful to {self.destination}")
-                return True
-            except grpc.RpcError as err:
-                self.logger.error(f"GRPC Ping error to {self.destination}: {err}")
-                await self.channel.close()
-                return False
-
+    @after_timeout(timeout=PING_TIMEOUT)
+    async def ping(self) -> bool:
         try:
-            while True:
-                res = await ping()
+            self.logger.info(f"Pinging {self.destination}")
+            await self.Ping(Empty(), timeout=10)
+            self.logger.success(f"Ping successful to {self.destination}")
+            return True
+        except grpc.RpcError as err:
+            self.logger.error(f"GRPC Ping error to {self.destination}: {err}")
+            await self.channel.close()
+            return False
+
+    async def keepalive(self) -> None:
+        while True:
+            try:
+                res = await self.ping()
                 if not res:
                     break
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self.logger.warning(f"Connection to {self.destination} lost")
+            except Exception as e:
+                self.logger.error(f"Connection to {self.destination} lost: {e}")
+                break
 
     async def close(self) -> None:
         self.logger.info(f"Closing connection to {self.destination}")
-        if self.keepalive:
-            self.keepalive.cancel()
+        if self.keepalive_task:
+            self.keepalive_task.cancel()
         await self.channel.close(GRACE_PERIOD)

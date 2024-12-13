@@ -27,6 +27,10 @@ class AbstractNetworkService(ABC):
         pass
 
     @abstractmethod
+    def broadcast_message(self, message: "Message") -> Awaitable[None]:
+        pass
+
+    @abstractmethod
     async def get_blockchain(self) -> list[peer_pb2.Block]:
         pass
 
@@ -69,10 +73,12 @@ class ValidType(TypedDict):
 
 
 class Vote(object):
-    pubkey: bytes
-    target: bytes | None
-
-    def __init__(self, pubkey: bytes, target: bytes | None = None):
+    def __init__(self, pubkey: bytes, target: bytes):
+        """
+        :param pubkey: the public key of the validator
+        :param target: the hash of the block being voted on.
+        If it is a null prevote its going to be binary empty string due to protobuf working like that.
+        """
         self.pubkey = pubkey
         self.target = target
 
@@ -84,10 +90,12 @@ class Vote(object):
 
 
 class Commit(object):
-    pubkey: bytes
-    target: bytes | None
-
     def __init__(self, pubkey: bytes, target: bytes):
+        """
+        :param pubkey: the public key of the validator
+        :param target: the hash of the block being voted on.
+        If it is a null precommit its going to be binary empty string due to protobuf working like that.
+        """
         self.pubkey = pubkey
         self.target = target
 
@@ -102,6 +110,7 @@ Message = peer_pb2.ProposeBlockRequest | peer_pb2.PrevoteMessage | peer_pb2.Prec
 
 
 class AbstractMessageConsumer(ABC):
+
     @abstractmethod
     async def receive_proposal(self, message: peer_pb2.ProposeBlockRequest) -> None:
         pass
@@ -230,7 +239,7 @@ class AbstractCryptoService(ABC):
 
     @abstractmethod
     def sign_prevote(
-        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[bytes]]
+        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[peer_pb2.Transaction]] = None
     ) -> peer_pb2.PrevoteMessage:
         pass
 
