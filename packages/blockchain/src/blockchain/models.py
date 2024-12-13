@@ -251,6 +251,14 @@ class AbstractCryptoService(ABC):
     def sign_transaction(self, tx_data: peer_pb2.TransactionData) -> peer_pb2.Transaction:
         pass
 
+    @abstractmethod
+    def verify_message(self, message: Message) -> bool:
+        pass
+
+    @abstractmethod
+    def verify_transaction(self, tx: peer_pb2.Transaction) -> bool:
+        pass
+
 
 class AbstractValidationService(ABC):
     @abstractmethod

@@ -111,6 +111,10 @@ class Tendermint(StateMachine):
             if not message:
                 continue
 
+            if not self.crypto_service.verify_message(message):
+                self.logger.error(f"Invalid signature in message from {message.pubkey.hex()[:8]}")
+                continue
+
             if (round := message.round) > self.context.round:
                 self.logger.info(f"Received message from future round {round} - Backlogging")
                 if round not in self.backlog:

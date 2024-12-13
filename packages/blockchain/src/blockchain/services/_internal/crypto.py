@@ -1,9 +1,11 @@
 import hashlib
 import time
 from typing import Optional, override
-from blockchain.models import AbstractCryptoService
+from blockchain.models import AbstractCryptoService, Message
 from blockchain.generated import peer_pb2
-from ecdsa import SigningKey, NIST256p  # type: ignore
+from ecdsa import SigningKey, VerifyingKey, NIST256p  # type: ignore
+import ecdsa
+from copy import deepcopy
 
 
 class CryptoService(AbstractCryptoService):
@@ -50,6 +52,22 @@ class CryptoService(AbstractCryptoService):
         return msg
 
     @override
+    def verify_message(self, message: Message) -> bool:
+        vk = VerifyingKey.from_string(message.pubkey, curve=NIST256p)
+        copy = deepcopy(message)
+        copy.ClearField("signature")
+        copy.ClearField("pubkey")
+        try:
+            return vk.verify(
+                message.signature,
+                copy.SerializeToString(
+                    deterministic=True,
+                ),
+            )
+        except ecdsa.BadSignatureError:
+            return False
+
+    @override
     def get_pubkey(self) -> bytes:
         return self._kpub
 
@@ -63,3 +81,14 @@ class CryptoService(AbstractCryptoService):
         )
 
         return tx
+
+    @override
+    def verify_transaction(self, tx: peer_pb2.Transaction) -> bool:
+        vk = VerifyingKey.from_string(tx.public_key, curve=NIST256p)
+        try:
+            return vk.verify(
+                tx.signature,
+                tx.data.SerializeToString(deterministic=True),
+            )
+        except ecdsa.BadSignatureError:
+            return False

@@ -24,8 +24,8 @@ class FederationParticipant(object):
         validate_fn = None
         if self.validator:
             self.valloader = model.load_validation_dataset(
-                partition_id=val_id, num_validators=config.NUM_VALIDATORS
-            )  # type: ignore
+                partition_id=val_id, num_validators=config.NUM_VALIDATORS  # type: ignore
+            )
             validate_fn = self._validate
         self.node = Node(
             NodeConfig(

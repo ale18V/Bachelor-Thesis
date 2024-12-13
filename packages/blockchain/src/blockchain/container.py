@@ -68,4 +68,5 @@ class Container(containers.DeclarativeContainer):
         blockchain_service=blockchain_service,
         mempool_service=mempool_service,
         message_queue=message_service,
+        crypto_service=crypto_service,
     )

@@ -1,3 +1,4 @@
+from .utils import get_tx_hash
 import grpc
 from typing import Any
 import loguru
@@ -5,6 +6,7 @@ import loguru
 from blockchain.constants import GRACE_PERIOD
 from .models import (
     AbstractBlockchainService,
+    AbstractCryptoService,
     AbstractMempoolService,
     AbstractNetworkService,
     AbstractMessageService,
@@ -25,6 +27,7 @@ class NodeServer(NodeServicer):
         blockchain_service: AbstractBlockchainService,
         mempool_service: AbstractMempoolService,
         message_queue: AbstractMessageService,
+        crypto_service: AbstractCryptoService,
     ) -> None:
         super().__init__()
         self.host = config.host
@@ -33,6 +36,7 @@ class NodeServer(NodeServicer):
         self.messages = message_queue
         self.service = blockchain_service
         self.mempool = mempool_service
+        self.crypto = crypto_service
         self.logger = loguru.logger
 
     @loguru.logger.catch
@@ -80,7 +84,9 @@ class NodeServer(NodeServicer):
 
     async def AdvertiseTransaction(self, request: peer_pb2.Transaction, context: grpc.ServicerContext) -> Empty:
         self.logger.debug(f"Received transaction: {request}")
-
+        if not self.crypto.verify_transaction(request):
+            self.logger.error(f"Transaction {get_tx_hash(request)[:8]} is not valid")
+            return Empty()
         not_dup = self.mempool.add(request)
         if not_dup:
             self.network.broadcast_tx(request)
