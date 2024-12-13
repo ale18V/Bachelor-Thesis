@@ -23,7 +23,9 @@ class FederationParticipant(object):
         self.validator = val_id is not None
         validate_fn = None
         if self.validator:
-            self.valloader = model.load_validation_dataset(partition_id=val_id, num_validators=config.NUM_VALIDATORS)
+            self.valloader = model.load_validation_dataset(
+                partition_id=val_id, num_validators=config.NUM_VALIDATORS
+            )  # type: ignore
             validate_fn = self._validate
         self.node = Node(
             NodeConfig(
@@ -57,12 +59,12 @@ class FederationParticipant(object):
             state_dict, malicious_ratio = res
             self.global_model.load_state_dict(state_dict)
             loss, accuracy = model.test(self.global_model, self.testloader)
-            self.metrics.update(accuracy, loss, malicious_ratio)
+            self.metrics.update(block.header.height, accuracy, loss, malicious_ratio)
             if self.validator:
                 loss, accuracy = model.test(self.global_model, self.valloader)
-                self.validation_metrics.update(accuracy, loss, malicious_ratio)
+                self.validation_metrics.update(block.header.height, accuracy, loss, malicious_ratio)
 
-            if len(self.metrics) == config.NUM_ROUNDS:
+            if len(self.metrics) >= config.NUM_ROUNDS:
                 await self.stop()
                 return
 
@@ -89,4 +91,5 @@ class FederationParticipant(object):
         return True
 
     async def stop(self):
+        loguru.logger.info(f"Node {self.id} stopping")
         await self.node.stop()

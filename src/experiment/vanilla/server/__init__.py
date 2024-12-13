@@ -28,7 +28,7 @@ class AccuracyLoggingStrategy(flwr.server.strategy.FedAvg):
             item.num_examples for item in data
         )
         res = super().aggregate_evaluate(server_round, results, failures)
-        metrics.update(avg_acc, res[0] or math.nan, avg_malicious)
+        metrics.update(server_round, avg_acc, res[0] or math.nan, avg_malicious)
         return res
 
 

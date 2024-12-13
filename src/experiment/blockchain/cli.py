@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing.context import SpawnContext
 import time
+import blockchain
 import click
 from blockchain.node import BootstrapNode
 import numpy
@@ -12,6 +13,9 @@ from experiment.blockchain.peer import FederationParticipant
 
 
 def run_participant(id: int, port: int, malicious: bool, validator: int | None) -> MetricsStore:
+    import blockchain
+
+    blockchain.enable_logging(use_custom_fmt=True, disable=["server", "network"])
     participant = FederationParticipant(id, port, malicious, validator)
     return participant.run()
 
@@ -60,7 +64,16 @@ def cli(bootstrap: bool, plot_all: bool, malicious: bool):
             for i, result in enumerate(results):
                 experiment.plot.plot(metrics=result, path=f"blockchain-{i}")
 
-        metrics = MetricsStore(numpy.average([metrics.get() for metrics in results], axis=0).tolist())
+        aggregate = {}
+        for metric in results:
+            for height, (accuracy, loss, malicious) in metric.get_dict().items():
+                if height not in aggregate:
+                    aggregate[height] = []
+                aggregate[height].append((accuracy, loss, malicious))
+
+        for h in aggregate.keys():
+            aggregate[h] = tuple(numpy.average(aggregate[h], axis=0))
+        metrics = MetricsStore(aggregate)
 
         experiment.plot.plot(
             metrics=metrics,
@@ -70,6 +83,7 @@ def cli(bootstrap: bool, plot_all: bool, malicious: bool):
 
     if bootstrap:
         loop.create_task(run_federation())
+        blockchain.enable_logging(use_custom_fmt=True)
         bootstrap_node.run()
     else:
         loop.run_until_complete(run_federation())
