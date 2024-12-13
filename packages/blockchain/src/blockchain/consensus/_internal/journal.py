@@ -1,6 +1,6 @@
 from typing import Iterable, Optional
-from ...models import Commit, Vote, Message
-from ...generated import peer_pb2
+from blockchain.models import Commit, Vote, Message
+from blockchain.generated import peer_pb2
 
 
 class MessageLog:

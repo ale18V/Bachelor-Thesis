@@ -35,11 +35,12 @@ packages = ["src/blockchain"]
 
 [tool.mypy]
 exclude=["generated/", "tests/"]
+disable_error_code = ["import-untyped"]
 
 check_untyped_defs = true
 disallow_any_generics = true
 disallow_untyped_defs = true 
-# disallow_incomplete_defs = true
+follow_untyped_imports = false
 
 warn_unused_ignores = true
 warn_redundant_casts = true

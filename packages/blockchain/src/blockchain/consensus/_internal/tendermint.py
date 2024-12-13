@@ -1,7 +1,5 @@
 import asyncio
-import os
 from collections import deque
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from dependency_injector.wiring import Provide, inject
@@ -99,15 +97,6 @@ class Tendermint(StateMachine):
                 state=self.current_state.value,
             )
         )
-        level = "DEBUG" if os.getenv("DEBUG", False) else "INFO"
-        logger.add(
-            sys.stdout,
-            level=level,
-            colorize=True,
-            format="<level>{time:HH:mm:ss.SSS} {level}</level> <cyan>{function}:{line} {extra[address]} @ {extra[state]} "
-            + "H = {extra[height]} R = {extra[round]}</cyan>: {message}",
-            filter=lambda record: record["extra"].get("emitter") == "Tendermint",
-        )
 
         # ignore mypy error
         self.context: TendermintContext = TendermintContext(self.service.height, self.service.get_validators())
@@ -145,18 +134,17 @@ class Tendermint(StateMachine):
                     continue
                 self.logger.info(
                     f"Received prevote for {message.hash.hex()[:8] if message.hash else None} from {sender}\n"
-                    #   + f"Invalid txs: {[tx[:8] for tx in message.invalid_txs]}"
                 )
+                self.logger.debug(f"Invalid txs: {"\n".join([itx.hex()[:8] for itx in message.invalid_txs])}")
                 await self.network.broadcast_prevote(message)
                 await self.receive_prevote(message)
-                # print tx blacklist from messages
-                # self.logger.info(f"Invalid txs: {self.messages.tx_blacklist.get(message.round, {})}")
 
                 invalid_txs = list(self.messages.get_invalid_txs(message.round, self.service.inv_threshold))
-                self.logger.warning(f"Removing txs {[tx[:8] for tx in invalid_txs]}")
-                for txhash in invalid_txs:
-                    res = self.mempool.rm_id(txhash)
-                    self.logger.info(f"Removed tx {txhash.hex()[:8]} from mempool: {res}")
+                if invalid_txs:
+                    self.logger.warning(f"Removing txs {[tx.hex()[:8] for tx in invalid_txs]}")
+                    for txhash in invalid_txs:
+                        if self.mempool.rm_id(txhash):
+                            self.logger.debug(f"Removed tx {txhash.hex()[:8]} from mempool")
             elif isinstance(message, peer_pb2.PrecommitMessage):
                 if not self.validate_precommit(message):
                     continue

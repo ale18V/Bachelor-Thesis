@@ -58,12 +58,12 @@ GENESIS_BLOCK = peer_pb2.Block(
 
 PING_TIMEOUT = 60 * 2
 # Delay before voting proposing or precommitting
-ACTION_DELAY = 1
+ACTION_DELAY = 2
 # If the node doesn't receive at least 2/3 precommits confirming the block within this timeout it will start a new round
-PRECOMMIT_TIMEOUT = ACTION_DELAY * 4
+PRECOMMIT_TIMEOUT = ACTION_DELAY * 10
 # If the node doesn't receive at least 2/3 pre-votes confirming the block within this timeout it will send a null commit
-PREVOTE_TIMEOUT = ACTION_DELAY * 6
+PREVOTE_TIMEOUT = ACTION_DELAY * 10
 # If the node doesn't receive any blocks it will cast a null vote
-PROPOSE_TIMEOUT = ACTION_DELAY * 8
+PROPOSE_TIMEOUT = ACTION_DELAY * 10
 
 CONSTANT_REWARD_QUANTITY = 1000

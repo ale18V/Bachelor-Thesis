@@ -274,13 +274,3 @@ class AbstractMessageService(ABC):
     @abstractmethod
     def empty(self, height: int) -> bool:
         pass
-
-
-class Consensus(ABC):
-    @abstractmethod
-    async def run(self) -> None:
-        pass
-
-    @abstractmethod
-    def stop(self) -> None:
-        pass

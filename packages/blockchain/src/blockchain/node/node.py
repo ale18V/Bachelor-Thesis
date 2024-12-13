@@ -10,7 +10,6 @@ from blockchain.container import Container
 from blockchain.bus import EventType
 from blockchain.models import (
     AbstractNode,
-    Consensus,
 )
 
 
@@ -43,7 +42,7 @@ class Node(AbstractNode):
             self.monitor = aiomonitor.start_monitor(loop)
             self.monitor.__enter__()
 
-        self.consensus: Consensus
+        self.consensus: Tendermint | Lightweight
         # Listen to incoming messages
         loop.create_task(self.server.run_async())
 

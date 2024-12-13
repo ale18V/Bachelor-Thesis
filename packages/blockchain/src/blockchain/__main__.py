@@ -1,4 +1,6 @@
 import click
+
+from blockchain import enable_logging
 from .node import BootstrapNode, Node, WebGui
 from .constants import BOOTSTRAP_NODE_ADDRESS, DEFAULT_PORT
 from .models import NetworkConfig, NodeConfig
@@ -43,4 +45,5 @@ def run(port: int, peers: list[str], become_validator: bool, private_key: str) -
 
 
 if __name__ == "__main__":
+    enable_logging(use_custom_fmt=True)
     cli()

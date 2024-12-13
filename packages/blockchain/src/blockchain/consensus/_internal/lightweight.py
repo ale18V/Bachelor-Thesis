@@ -1,6 +1,5 @@
 import asyncio
 from typing import override
-
 from ...container import Container
 from .journal import MessageLog
 from ...models import (
@@ -8,7 +7,6 @@ from ...models import (
     AbstractMessageService,
     BaseMessageConsumer,
     AbstractNetworkService,
-    Consensus,
 )
 from ...generated.peer_pb2 import ProposeBlockRequest, PrecommitMessage, PrevoteMessage
 from loguru import logger
@@ -17,7 +15,7 @@ from dependency_injector.wiring import Provide, inject
 Message = ProposeBlockRequest | PrevoteMessage | PrecommitMessage
 
 
-class Lightweight(BaseMessageConsumer, Consensus):
+class Lightweight(BaseMessageConsumer):
     @logger.catch
     @inject
     def __init__(
