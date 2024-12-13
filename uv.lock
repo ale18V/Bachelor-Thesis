@@ -154,6 +154,7 @@ dependencies = [
     { name = "grpcio" },
     { name = "hypercorn" },
     { name = "loguru" },
+    { name = "python-statemachine" },
     { name = "quart" },
 ]
 
@@ -175,6 +176,7 @@ requires-dist = [
     { name = "grpcio", specifier = ">=1.64.3" },
     { name = "hypercorn", specifier = ">=0.17.3" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "python-statemachine", specifier = ">=2.5.0" },
     { name = "quart", specifier = ">=0.20.0" },
 ]
 
@@ -1510,6 +1512,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892 },
+]
+
+[[package]]
+name = "python-statemachine"
+version = "2.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/91/4f05f3931d1e9b1df71b17dc08c43feddf2bed7dbf13f95323df2cc8e340/python_statemachine-2.5.0.tar.gz", hash = "sha256:ae88cd22e47930b92b983a2176e61d811e571b69897be2568ec812c2885fb93a", size = 403718 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/2d/1c95ebe84df60d630f8e855d1df2c66368805444ac167e9b50f29eabe917/python_statemachine-2.5.0-py3-none-any.whl", hash = "sha256:0ed53846802c17037fcb2a92323f4bc0c833290fa9d17a3587c50886c1541e62", size = 50415 },
 ]
 
 [[package]]

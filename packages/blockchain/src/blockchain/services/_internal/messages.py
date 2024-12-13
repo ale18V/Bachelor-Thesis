@@ -10,7 +10,6 @@ class MessageService(AbstractMessageService):
         self.queues: dict[int, asyncio.Queue[Message]] = {}
 
     async def put(self, message: Message) -> None:
-
         if isinstance(message, peer_pb2.ProposeBlockRequest):
             height = message.block.header.height
         else:

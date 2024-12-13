@@ -19,7 +19,7 @@ class TendermintContext:
         self.validators = validators
         self.proposer = get_proposer(height, self.round, validators)
 
-    def next_round(self) -> None:
+    def new_round(self) -> None:
         self.round += 1
         self.proposer = get_proposer(self.height, self.round, self.validators)
 

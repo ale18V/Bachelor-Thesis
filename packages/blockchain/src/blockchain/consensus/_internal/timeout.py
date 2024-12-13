@@ -33,7 +33,7 @@ class TimeoutManager:
         @enqueue
         @after_timeout(timeout=timeout.duration, message=timeout.message)
         @loguru.logger.catch
-        async def __schedule(timeout: Timeout, height: int, round: int) -> None:
+        async def __schedule(timeout: Timeout[[int, int], None], height: int, round: int) -> None:
             if timeout.message:
                 loguru.logger.info(timeout.message)
             await timeout(height, round)

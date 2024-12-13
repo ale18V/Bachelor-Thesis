@@ -1,77 +1,64 @@
 import asyncio
-from enum import Enum
-from inspect import isawaitable
 import os
 from collections import deque
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Concatenate, Coroutine, Optional, ParamSpec, TypeVar, override
+from typing import Optional
 from dependency_injector.wiring import Provide, inject
+from statemachine import Event, State, StateMachine
 from blockchain.server import AbstractMempoolService
 from blockchain.services import NodeService
+from blockchain.utils import get_tx_hash
 from ...services._internal.messages import MessageService
 from .context import TendermintContext
-from .timeout import Timeout, TimeoutFactory
+from .timeout import Timeout, TimeoutManager
 from ...constants import ACTION_DELAY, PRECOMMIT_TIMEOUT, PREVOTE_TIMEOUT, PROPOSE_TIMEOUT
 from .journal import MessageLog
 from .utils import is_valid_round
 from ...models import (
     AbstractCryptoService,
     AbstractValidationService,
-    BaseMessageConsumer,
     AbstractBlockchainService,
-    Consensus,
     AbstractNetworkService,
 )
 from ...generated.peer_pb2 import Block, ProposeBlockRequest, PrecommitMessage, PrevoteMessage
 from loguru import logger
 import loguru
 from ...container import Container
+from blockchain.generated import peer_pb2
 
 Message = ProposeBlockRequest | PrevoteMessage | PrecommitMessage
 
 
-class State(Enum):
-    IDLE = "Idle"
-    PROPOSE = "Proposal"
-    PREVOTE = "Prevote"
-    PRECOMMIT = "Precommit"
-    FINAL = "Final"
-
-    def __str__(self) -> str:
-        return self.value.upper()
-
-
-class Tendermint(BaseMessageConsumer, Consensus):
+class Tendermint(StateMachine):
     """
     Tendermint algorithm implementation.
     References the description of the paper https://arxiv.org/pdf/1807.04938.
     There are some (non critical?) discrepancies which need to be fixed.
     """
 
-    @staticmethod
-    def _to_state(state: State, conditional: bool = False):  # type: ignore
-        P = ParamSpec("P")
-        R = TypeVar("R")
+    IDLE = State(initial=True)
+    PROPOSE = State()
+    PREVOTE = State()
+    PRECOMMIT = State()
+    FINAL = State(final=True)
 
-        def decorator(
-            func: Callable[Concatenate["Tendermint", P], R]
-        ) -> Callable[Concatenate["Tendermint", P], Coroutine[Any, Any, R]]:
-            async def wrapper(self: "Tendermint", *args: P.args, **kwargs: P.kwargs) -> R:
-                res = func(self, *args, **kwargs)
-                if isawaitable(res):
-                    res = await res
+    rule1 = PROPOSE.to(PREVOTE)
+    rule2 = PROPOSE.to(PREVOTE)
+    rule3 = PREVOTE.to(PRECOMMIT) | PRECOMMIT.to(PRECOMMIT)
+    rule4 = PRECOMMIT.to(PROPOSE)
+    rule5 = PREVOTE.to(PRECOMMIT)
+    receive_precommit = Event(rule4)
+    receive_prevote = Event(rule3 | rule5)
+    receive_proposal = Event(rule1 | rule2)
+    timeout_precommit = Event(PRECOMMIT.to(PROPOSE))
+    timeout_prevote = Event(PREVOTE.to(PRECOMMIT))
+    timeout_propose = Event(PROPOSE.to(PREVOTE))
 
-                if conditional and not res:
-                    return res
+    next_round = Event(PREVOTE.to(PROPOSE) | PROPOSE.to(PROPOSE) | PRECOMMIT.to(PROPOSE))
 
-                loguru.logger.info(f"Transitioning to state {state} because of {func.__name__}")
-                self.state = state
-                return res
-
-            return wrapper
-
-        return decorator
+    _start = IDLE.to(PROPOSE)
+    _stop = PREVOTE.to(FINAL) | PROPOSE.to(FINAL) | PRECOMMIT.to(FINAL) | IDLE.to(FINAL)
 
     @inject
     def __init__(
@@ -85,7 +72,7 @@ class Tendermint(BaseMessageConsumer, Consensus):
         message_queue: MessageService = Provide[Container.message_service],
         loop: asyncio.AbstractEventLoop = Provide[Container.loop],
     ) -> None:
-        super().__init__(queue=message_queue)
+        super().__init__(allow_event_without_transition=True)
         self.network = network_service
         self.service = blockchain_service
         self.crypto_service = crypto_service
@@ -94,23 +81,22 @@ class Tendermint(BaseMessageConsumer, Consensus):
         self.messages = MessageLog()
         self.validation_service = validation_service
         self.node_service = node_service
-        self.state = State.IDLE
-        self.timeout_factory = TimeoutFactory(
+        self.timeout_manager = TimeoutManager(
             {
-                State.PROPOSE.value: Timeout(self.on_timeout_propose, PROPOSE_TIMEOUT),
-                State.PREVOTE.value: Timeout(self.on_timeout_prevote, PREVOTE_TIMEOUT),
-                State.PRECOMMIT.value: Timeout(
-                    self.on_timeout_precommit, PRECOMMIT_TIMEOUT, "Precommit timeout ticked"
-                ),
+                self.PROPOSE.name: Timeout(self.timeout_propose, PROPOSE_TIMEOUT),
+                self.PREVOTE.name: Timeout(self.timeout_prevote, PREVOTE_TIMEOUT),
+                self.PRECOMMIT.name: Timeout(self.timeout_precommit, PRECOMMIT_TIMEOUT),
             }
         )
 
         # === MISC === #
-        self.logger = loguru.logger.bind(emitter="Tendermint").patch(
+        self.logger = loguru.logger.bind(
+            emitter="Tendermint", address=self.crypto_service.get_pubkey().hex()[:8]
+        ).patch(
             lambda record: record["extra"].update(
                 height=getattr(self.context, "height", "N/A"),
                 round=getattr(self.context, "round", "N/A"),
-                state=self.state,
+                state=self.current_state.value,
             )
         )
         level = "DEBUG" if os.getenv("DEBUG", False) else "INFO"
@@ -118,7 +104,7 @@ class Tendermint(BaseMessageConsumer, Consensus):
             sys.stdout,
             level=level,
             colorize=True,
-            format="<level>{time:HH:mm:ss.SSS} {level}</level> <cyan>{name}:{line} @ {extra[state]} "
+            format="<level>{time:HH:mm:ss.SSS} {level}</level> <cyan>{function}:{line} {extra[address]} @ {extra[state]} "
             + "H = {extra[height]} R = {extra[round]}</cyan>: {message}",
             filter=lambda record: record["extra"].get("emitter") == "Tendermint",
         )
@@ -127,156 +113,98 @@ class Tendermint(BaseMessageConsumer, Consensus):
         self.context: TendermintContext = TendermintContext(self.service.height, self.service.get_validators())
         # ==== LOOP ==== #
         self.loop = loop
-        self.backlog: dict[int, deque] = dict()
+        self.backlog: dict[int, deque[Message]] = dict()
 
     # ================== ACTIONS ================== #
-    @override
+    async def poll_messages(self) -> None:
+        while True:
+            message = await self.message_queue.get(self.service.height, timeout=5)
+            if not message:
+                continue
+
+            if (round := message.round) > self.context.round:
+                self.logger.info(f"Received message from future round {round} - Backlogging")
+                if round not in self.backlog:
+                    self.backlog[round] = deque()
+                self.backlog[round].append(message)
+                await self.network.broadcast_message(message)
+                if len(self.backlog[round]) >= self.service.inv_threshold:
+                    await self.next_round()
+
+                continue
+
+            sender = message.pubkey.hex()[:8]
+            if isinstance(message, peer_pb2.ProposeBlockRequest):
+                if not self.validate_proposal(message):
+                    continue
+                self.logger.info(f"Received proposal {message.block.header.hash.hex()[:8]} from {sender}")
+                await self.network.broadcast_proposal(message)
+                await self.receive_proposal(message)
+            elif isinstance(message, peer_pb2.PrevoteMessage):
+                if not self.validate_prevote(message):
+                    continue
+                self.logger.info(
+                    f"Received prevote for {message.hash.hex()[:8] if message.hash else None} from {sender}\n"
+                    #   + f"Invalid txs: {[tx[:8] for tx in message.invalid_txs]}"
+                )
+                await self.network.broadcast_prevote(message)
+                await self.receive_prevote(message)
+                # print tx blacklist from messages
+                # self.logger.info(f"Invalid txs: {self.messages.tx_blacklist.get(message.round, {})}")
+
+                invalid_txs = list(self.messages.get_invalid_txs(message.round, self.service.inv_threshold))
+                self.logger.warning(f"Removing txs {[tx[:8] for tx in invalid_txs]}")
+                for txhash in invalid_txs:
+                    res = self.mempool.rm_id(txhash)
+                    self.logger.info(f"Removed tx {txhash.hex()[:8]} from mempool: {res}")
+            elif isinstance(message, peer_pb2.PrecommitMessage):
+                if not self.validate_precommit(message):
+                    continue
+                self.logger.info(
+                    f"Received precommit for {message.hash.hex()[:8] if message.hash else None} from {sender}"
+                )
+                await self.network.broadcast_precommit(message)
+                await self.receive_precommit(message)
+
     async def run(self) -> None:
-        if self.state != State.IDLE:
-            return
-        self.context = TendermintContext(height=self.service.height, validators=self.service.get_validators())
-        self.poll = self.loop.create_task(self.poll_messages(lambda: getattr(self.context, "height", 0)))
-        self.state = State.PROPOSE
-        self.loop.create_task(self.start_round())
         try:
+            self.context = TendermintContext(height=self.service.height, validators=self.service.get_validators())
+            self.poll = self.loop.create_task(self.poll_messages())
+            await self._start()
             await self.poll
         except asyncio.CancelledError:
-            self.logger.info("Consensus stopped")
+            self.logger.info("Consensus Stopped")
 
-    @override
     def stop(self) -> None:
-        for _state, timeout_dict in self.timeout_factory.scheduled_timeouts.items():
+        for _state, timeout_dict in self.timeout_manager.scheduled_timeouts.items():
             for timeout in timeout_dict.values():
                 timeout.cancel()
         self.poll.cancel()
-        self.state = State.FINAL
-
-    # ================== MESSAGE HANDLERS ================== #
-    @override
-    async def receive_proposal(self, req: ProposeBlockRequest) -> None:
-        if not self.validate_proposal(req):
-            return
-
-        self.logger.info(f"Received proposal from {req.pubkey.hex()} for {req.block.header.hash.hex()}")
-        if self.rule1_cond(req):
-            await self.rule1(req)
-        elif self.rule2_cond(req):
-            await self.rule2(req)
-
-        await self.network.broadcast_proposal(req)
-
-    def rule2_cond(self, req: ProposeBlockRequest) -> bool:
-        return (
-            self.state == State.PROPOSE
-            and is_valid_round(req)
-            and self.messages.has_prevote_quorum(
-                req.block.header.valid_round, req.block.header.hash, self.service.threshold
-            )
-        )
-
-    def rule1_cond(self, req: ProposeBlockRequest) -> bool:
-        return self.state == State.PROPOSE and not is_valid_round(req)
-
-    @override
-    async def receive_prevote(self, req: PrevoteMessage) -> None:
-        if not self.validate_prevote(req):
-            if self.context.round < req.round and len(self.backlog.get(req.round, [])) >= self.service.inv_threshold:
-                self.context.next_round()
-                self.state = State.PROPOSE
-                await self.start_round()
-            return
-
-        for txhash in self.messages.get_invalid_txs(req.round, self.service.inv_threshold):
-            self.mempool.rm_id(txhash)
-        self.logger.info(f"Received prevote from {req.pubkey.hex()} for {req.hash.hex()}")
-        if self.rule3_cond(req):
-            await self.rule3(req)
-        elif not self.timeout_factory.is_scheduled(self.state.value, self.context.height, self.context.round):
-            self.timeout_factory.schedule(self.state.value, self.context.height, self.context.round)
-        await self.network.broadcast_prevote(req)
-
-    def rule3_cond(self, req: PrevoteMessage) -> bool:
-        return self.state in (State.PREVOTE, State.PRECOMMIT) and self.messages.has_prevote_quorum(
-            req.round, req.hash, self.service.threshold
-        )
-
-    @override
-    async def receive_precommit(self, req: PrecommitMessage) -> None:
-        if not self.validate_precommit(req):
-            if self.context.round < req.round and len(self.backlog.get(req.round, [])) >= self.service.inv_threshold:
-                self.context.next_round()
-                self.state = State.PROPOSE
-                await self.start_round()
-            return
-
-        self.logger.info(f"Received precommit from {req.pubkey.hex()} for {req.hash.hex()}")
-        if self.rule4_cond(req):
-            await self.rule4(req)
-        elif not self.timeout_factory.is_scheduled(self.state.value, self.context.height, self.context.round):
-            self.timeout_factory.schedule(self.state.value, self.context.height, self.context.round)
-        await self.network.broadcast_precommit(req)
-
-    def rule4_cond(self, req: PrecommitMessage) -> bool:
-        return self.messages.get_candidate(req.hash) is not None and self.messages.has_precommit_quorum(
-            req.round, req.hash, self.service.threshold
-        )
-
-    # ================== ACTION CHECKS ================== #
-    def validate_proposal(self, req: ProposeBlockRequest) -> bool:
-        if req.pubkey != self.context.proposer:
-            self.logger.warning(f"Received invalid proposer {req.pubkey.hex()} != {self.context.proposer.hex()}")
-            return False
-        elif req.round != self.context.round:
-            if req.round not in self.backlog:
-                self.backlog[req.round] = deque()
-            self.backlog[req.round].append(req)
-            return False
-        elif not self.messages.add_proposal(req):
-            self.logger.debug(f"Proposal {req.block.header.hash.hex()} already received")
-            return False
-
-        return True
-
-    def validate_prevote(self, req: PrevoteMessage) -> bool:
-        if req.pubkey not in self.context.validators:
-            logger.warning("Invalid validator")
-            return False
-        elif req.round != self.context.round:
-            if req.round not in self.backlog:
-                self.backlog[req.round] = deque()
-            self.backlog[req.round].append(req)
-            return False
-        elif not self.messages.add_prevote(req):
-            logger.debug(f"Prevote {(req.hash or b'').hex()} already received")
-            return False
-
-        return True
-
-    def validate_precommit(self, req: PrecommitMessage) -> bool:
-        if req.pubkey not in self.context.validators:
-            logger.warning("Invalid validator")
-            return False
-        elif req.round != self.context.round:
-            if req.round not in self.backlog:
-                self.backlog[req.round] = deque()
-            self.backlog[req.round].append(req)
-            return False
-        elif not self.messages.add_precommit(req):
-            logger.debug(f"Precommit {(req.hash or b'').hex()} already received")
-            return False
-
-        return True
+        self.loop.create_task(self._stop())
 
     # ================== STATES ================== #
+    def on_enter_state(self, state: State, event: Event) -> None:
+        self.logger.debug(f"Entering {state.value} because of {event.name}")
+
+    @PREVOTE.enter
+    def _enter_prevote(self) -> None:
+        self.timeout_manager.schedule(self.PREVOTE.name, self.context.height, self.context.round)
+
+    @PRECOMMIT.enter
+    def _enter_precommit(self) -> None:
+        self.timeout_manager.schedule(self.PRECOMMIT.name, self.context.height, self.context.round)
+
+    @PROPOSE.enter
     async def start_round(self) -> None:
-        self.logger.info(
-            f"Entering new round - Proposer is {self.context.proposer.hex()} - Threshold is {self.service.threshold}"
+        is_proposer = self.context.proposer == self.crypto_service.get_pubkey()
+        self.logger.success(
+            "Entering new round - "
+            + ("I am the proposer" if is_proposer else f"Proposer is {self.context.proposer.hex()[:8]}")
+            + f" - Threshold is {self.service.threshold}"
         )
 
         if self.context.proposer == self.crypto_service.get_pubkey():
             # If the node is a proposer broadcast the proposed block
-            self.logger.info("I am the proposer")
-
             block: Block
             if self.context.height == 1 and self.context.round == 0:
                 try:
@@ -286,7 +214,7 @@ class Tendermint(BaseMessageConsumer, Consensus):
                     self.logger.info(f"Stopping {e}")
                     self.stop()
             if self.context.valid:
-                self.logger.info(f"Proposing latest valid block {(self.context.valid['id'] or b'').hex()}")
+                self.logger.info(f"Proposing latest valid block {(self.context.valid['id']).hex()}")
                 block = self.messages.get_candidate(self.context.valid["id"])  # type: ignore
 
             else:
@@ -299,19 +227,80 @@ class Tendermint(BaseMessageConsumer, Consensus):
             await self.message_queue.put(req)
         else:
             # if node is not a proposer schedule a timeout and wait
-            self.timeout_factory.schedule(self.state.value, self.context.height, self.context.round)
+            self.timeout_manager.schedule(self.PROPOSE.name, self.context.height, self.context.round)
 
         if (backlog := self.backlog.get(self.context.round, None)) is not None:
-            for message in backlog:
+            while backlog:
+                message = backlog.popleft()
+                self.logger.debug(f"Processing backlog message {message}")
                 await self.message_queue.put(message)
 
+    # ================== ACTION CHECKS ================== #
+    def validate_proposal(self, req: ProposeBlockRequest) -> bool:
+        if req.pubkey != self.context.proposer:
+            self.logger.warning(f"Received invalid proposer {req.pubkey.hex()} != {self.context.proposer.hex()}")
+            return False
+        elif not self.messages.add_proposal(req):
+            self.logger.debug(f"Proposal {req.block.header.hash.hex()} already received")
+            return False
+        return True
+
+    def validate_prevote(self, req: PrevoteMessage) -> bool:
+        if req.pubkey not in self.context.validators:
+            logger.warning("Invalid validator")
+            return False
+        elif not self.messages.add_prevote(req):
+            logger.debug(f"Prevote {req.hash.hex()[:8] if req.hash else None} already received")
+            return False
+        return True
+
+    def validate_precommit(self, req: PrecommitMessage) -> bool:
+        if req.pubkey not in self.context.validators:
+            logger.warning("Invalid validator")
+            return False
+
+        elif not self.messages.add_precommit(req):
+            logger.debug(f"Precommit {req.hash.hex()[:8] if req.hash else None} already received")
+            return False
+
+        return True
+
+    def before_transition(self, event: Event, source: State, target: State) -> None:
+        self.logger.debug(f"Transitioning from {source.name} to {target.name} because of {event.name}")
+
+    # ================== RULES ================== #
+    rule1.cond(lambda req, **kwargs: not is_valid_round(req))
+    rule2.cond(
+        lambda req, machine: is_valid_round(req)
+        and machine.messages.has_prevote_quorum(
+            req.block.header.valid_round, req.block.header.hash, machine.service.threshold
+        )
+    )
+
+    @rule5.cond
+    @rule3.cond
+    def _boh(self, req: PrevoteMessage) -> bool:
+        return self.messages.has_prevote_quorum(req.round, req.hash, self.service.threshold)
+
+    @rule5.unless
+    @rule3.cond
+    def _boh2(self, req: PrevoteMessage) -> bool:
+        return bool(req.hash)
+
+    rule4.cond(
+        lambda req, machine: machine.messages.has_precommit_quorum(req.round, req.hash, machine.service.threshold)
+    )
+
     # ================== TRANSITIONS ================== #
-    @_to_state(State.PREVOTE)
-    async def rule1(self, req: ProposeBlockRequest) -> None:
-        target: Optional[bytes] = req.block.header.hash
+    @rule1.on
+    async def _on_rule1(self, req: ProposeBlockRequest) -> None:
+        block_id = req.block.header.hash
+        target: Optional[bytes] = block_id
         invalid_txs = self.validation_service.validate_block(req.block)
         if invalid_txs:
-            self.logger.error(f"Block {target.hex()} with invalid txs received")
+            self.logger.error(
+                f"Block {block_id.hex()} with invalid txs received: {[get_tx_hash(x)[:8] for x in invalid_txs]}"
+            )
 
         if invalid_txs or (self.context.locked and self.context.locked["id"] != target):
             target = None
@@ -320,72 +309,84 @@ class Tendermint(BaseMessageConsumer, Consensus):
         await self.message_queue.put(prevote)
         await asyncio.sleep(ACTION_DELAY)
 
-    @_to_state(State.PREVOTE)
-    async def rule2(self, req: ProposeBlockRequest) -> None:
+    @rule2.on
+    async def _on_rule2(self, req: ProposeBlockRequest) -> None:
         vr = req.block.header.valid_round
-        target: Optional[bytes] = req.block.header.hash
+        block_id = req.block.header.hash
+        target: Optional[bytes] = block_id
         invalid_txs = self.validation_service.validate_block(req.block)
         if invalid_txs:
-            self.logger.error(f"Block {target.hex()} with invalid txs received")
+            self.logger.error(
+                f"Block {block_id.hex()} with invalid txs received {[get_tx_hash(x)[:8] for x in invalid_txs]}"
+            )
 
         if invalid_txs or (
             self.context.locked and self.context.locked["round"] > vr and self.context.locked["id"] != target
         ):
             target = None
 
-        prevote = self.crypto_service.sign_prevote(self.context.height, self.context.round, invalid_txs)
+        prevote = self.crypto_service.sign_prevote(self.context.height, self.context.round, target, invalid_txs)
         await self.message_queue.put(prevote)
         await asyncio.sleep(ACTION_DELAY)
 
-    @_to_state(State.PRECOMMIT)
-    async def rule3(self, req: PrevoteMessage) -> None:
+    @rule3.on
+    async def _on_rule3(self, req: PrevoteMessage) -> None:
         round, hash = req.round, req.hash
 
-        if self.state == State.PREVOTE:
+        if self.current_state == self.PREVOTE:
             self.context.lock(round, hash)
             precommit = self.crypto_service.sign_precommit(self.context.height, self.context.round, hash)
             await self.message_queue.put(precommit)
+
+        self.logger.info(f"Received enough prevotes for {hash.hex()}")
         self.context.newvalid(round, hash)
 
-    async def rule4(self, req: PrecommitMessage) -> None:
-        self.logger.success(f"Block {req.hash.hex()} has been committed\n\n")
+    @rule5.on
+    async def _on_rule5(self, req: PrevoteMessage) -> None:
+        null_precommit = self.crypto_service.sign_precommit(self.context.height, self.context.round, None)
+        await self.message_queue.put(null_precommit)
+
+    @rule4.on
+    async def _on_rule4(self, req: PrecommitMessage) -> None:
+        if not req.hash:
+            self.context.new_round()
+            return
+
         block = self.messages.get_candidate(req.hash)
         if not block:
             self.logger.error(f"No candidate for precommit {req.hash.hex()} :(")
             return
+        self.logger.success(f"Block {req.hash.hex()} has been committed\n\n")
         self.service.update(block)
         del self.context
         self.context = TendermintContext(height=self.service.height, validators=self.service.get_validators())
         self.messages.reset()
-        self.state = State.PROPOSE
-        await self.start_round()
 
     # ================== TIMEOUTS ================== #
+    @timeout_propose.unless
+    @timeout_prevote.unless
+    @timeout_precommit.unless
     def timeout_not_relevant(self, height: int, round: int) -> bool:
         return self.context.round != round or self.context.height != height
 
-    @_to_state(State.PREVOTE, conditional=True)
-    async def on_timeout_propose(self, height: int, round: int) -> bool:
-        if self.timeout_not_relevant(height, round) or self.state != State.PROPOSE:
-            return False
-        self.logger.info("Propose timeout. Casting null vote")
+    @timeout_propose.on
+    async def _on_timeout_propose(self, height: int, round: int) -> None:
         req = self.crypto_service.sign_prevote(height, round, None)
         await self.message_queue.put(req)
-        return True
+        self.logger.info("Propose timeout. Casting null vote")
 
-    @_to_state(State.PRECOMMIT, conditional=True)
-    async def on_timeout_prevote(self, height: int, round: int) -> bool:
-        if self.timeout_not_relevant(height, round) or self.state != State.PREVOTE:
-            return False
-        self.logger.info("Prevote timeout. Casting null precommit")
+    @timeout_prevote.on
+    async def _on_timeout_prevote(self, height: int, round: int) -> None:
         req = self.crypto_service.sign_precommit(height, round, None)
         await self.message_queue.put(req)
-        return True
+        self.logger.info("Prevote timeout. Casting null precommit")
 
+    @timeout_precommit.on
     async def on_timeout_precommit(self, height: int, round: int) -> None:
-        if self.timeout_not_relevant(height, round) or self.state != State.PRECOMMIT:
-            return
         self.logger.info("Precommit timeout. Starting new round")
-        self.context.next_round()
-        self.state = State.PROPOSE
-        await self.start_round()
+        self.context.new_round()
+
+    @next_round.on
+    def _on_next_round(self) -> None:
+        self.logger.info("Received enough messages to proceed to next round")
+        self.context.new_round()

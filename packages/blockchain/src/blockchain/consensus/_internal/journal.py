@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, override
+from typing import Iterable, Optional
 from ...models import Commit, Vote, Message
 from ...generated import peer_pb2
 
@@ -8,7 +8,7 @@ class MessageLog:
     precommits: dict[int, set[Commit]]
     proposals: dict[bytes, peer_pb2.Block]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.prevotes = {}
         self.precommits = {}
         self.proposals = {}
@@ -73,9 +73,8 @@ class MessageLog:
         return self.count_prevotes_for(round, target) >= threshold
 
     def get_invalid_txs(self, round: int, threshold: int) -> Iterable[bytes]:
-        return filter(lambda x: x[1] >= threshold, self.tx_blacklist[round].items())
+        return map(lambda x: x[0], filter(lambda x: x[1] >= threshold, self.tx_blacklist.get(round, {}).items()))
 
-    @override
     def reset(self) -> None:
         self.prevotes = {}
         self.precommits = {}

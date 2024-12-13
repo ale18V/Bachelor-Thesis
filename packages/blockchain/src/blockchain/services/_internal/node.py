@@ -53,24 +53,15 @@ class NodeService(object):
         #         self.mempool.rm(tx)
         #         transactions.pop(i)
 
-        body = BlockBody(
-            transactions=transactions
-            + [
-                self.crypto.sign_transaction(
-                    TransactionData(
-                        coinbase=CoinbaseTransaction(
-                            rewards=[
-                                Reward(
-                                    address=tx.public_key,
-                                    quantity=CONSTANT_REWARD_QUANTITY,
-                                )
-                                for tx in transactions
-                            ]
-                        )
-                    )
-                )
-            ],
-        )
+        rewards = [
+            Reward(address=tx.public_key, quantity=CONSTANT_REWARD_QUANTITY)
+            for tx in filter(lambda tx: tx.data.HasField("update"), transactions)
+        ]
+        if rewards:
+            transactions.append(
+                self.crypto.sign_transaction(TransactionData(coinbase=CoinbaseTransaction(rewards=rewards)))
+            )
+        body = BlockBody(transactions=transactions)
 
         block = Block(
             header=BlockHeader(

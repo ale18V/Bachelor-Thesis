@@ -1,7 +1,10 @@
 import asyncio
+import hashlib
 from typing import Any, Awaitable, Callable, Coroutine, Optional, ParamSpec, TypeVar
 import sys
 import loguru
+
+from blockchain.generated import peer_pb2
 
 
 R = TypeVar("R")
@@ -53,3 +56,7 @@ async def async_input(prompt: Optional[str] = None) -> str:
     except KeyboardInterrupt:
         stream_reader.feed_eof()
         return ""
+
+
+def get_tx_hash(tx: peer_pb2.Transaction) -> str:
+    return hashlib.sha256(tx.SerializeToString(deterministic=True)).hexdigest()
