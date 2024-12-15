@@ -7,6 +7,7 @@ import click
 from blockchain.node import BootstrapNode
 import numpy
 from experiment import config, utils
+from .validation import DatasetAccuracyValidation
 from experiment.metrics import MetricsStore
 import experiment.plot
 from experiment.blockchain.peer import FederationParticipant
@@ -14,9 +15,16 @@ from experiment.blockchain.peer import FederationParticipant
 
 def run_participant(id: int, port: int, malicious: bool, validator: int | None) -> MetricsStore:
     import blockchain
+    import experiment.model
 
     blockchain.enable_logging(use_custom_fmt=True, disable=["server", "network"])
-    participant = FederationParticipant(id, port, malicious, validator)
+    validation = None
+    if validator is not None:
+        valloader = experiment.model.load_validation_dataset(
+            partition_id=validator, num_validators=config.NUM_VALIDATORS
+        )
+        validation = DatasetAccuracyValidation(valloader)
+    participant = FederationParticipant(id, port, malicious, validation)
     return participant.run()
 
 

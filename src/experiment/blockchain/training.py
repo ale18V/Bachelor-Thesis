@@ -1,23 +1,28 @@
-from collections import OrderedDict
 import json
 import threading
-from typing import Optional
-from blockchain.generated.peer_pb2 import Block
+from typing import Iterable, Optional
+from blockchain.generated.peer_pb2 import UpdateTransaction
 import loguru
 import numpy
 import torch
 from experiment import config, model
+from .models import AggregationStrategy
 from experiment.blockchain.serialization import deserialize_params
 from experiment.metrics import MetricsStore
 from torch.utils.data import DataLoader
+from torch import nn
 
 
-class FedAvgAggregator(object):
-    def aggregate(self, net: model.Net, block: Block) -> Optional[tuple[OrderedDict[str, torch.Tensor], float]]:
-        ml_updates = [tx.data.update for tx in filter(lambda tx: tx.data.HasField("update"), block.body.transactions)]
-        if not ml_updates:
+class FedAvgAggregation(AggregationStrategy):
+    def __init__(self, net: nn.Module) -> None:
+        self.model_keys = net.state_dict().keys()
+        self.model_class = net.__class__
+
+    def aggregate(self, txs: Iterable[UpdateTransaction]) -> Optional[tuple[nn.Module, float]]:
+        txs = list(txs)
+        all_params = [deserialize_params(update.data) for update in txs]
+        if not all_params:
             return None
-        all_params = [deserialize_params(update.data) for update in ml_updates]
 
         weights = [
             numpy.average(
@@ -27,9 +32,11 @@ class FedAvgAggregator(object):
             for layer in zip(*all_params)
         ]
 
-        state_dict = OrderedDict(dict(zip(net.state_dict().keys(), (torch.tensor(layer) for layer in weights))))
-        return state_dict, sum(1 for _ in filter(lambda tx: json.loads(tx.metadata)["is_malicious"], ml_updates)) / len(
-            ml_updates
+        state_dict = {k: v for k, v in zip(self.model_keys, (torch.tensor(layer) for layer in weights))}
+        net = self.model_class()
+        net.load_state_dict(state_dict)
+        return net, sum(1 for _ in filter(lambda tx: json.loads(tx.metadata)["is_malicious"], txs)) / len(
+            txs
         )
 
 
@@ -39,11 +46,11 @@ class TrainingService(object):
     def __init__(self, trainloader: DataLoader, testloader: DataLoader, malicious: bool) -> None:
         self.trainloader = trainloader
         self.testloader = testloader
-        self.aggregator = FedAvgAggregator()
         self._is_training = False
-        self.metrics = MetricsStore()
         self.is_malicious = malicious
+        self.metrics = MetricsStore()
         self.net = model.Net()
+        self.aggregator = FedAvgAggregation(self.net)
 
     @loguru.logger.catch
     def fit(self, net_state: dict[str, torch.Tensor]) -> tuple[model.Net, bool]:

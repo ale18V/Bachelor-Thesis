@@ -99,7 +99,10 @@ def is_correct(predicted, target):
     return torch.argmax(predicted) == torch.argmax(target)
 
 
-def test(net, testloader, verbose=False):
+def test(net: nn.Module, testloader: DataLoader, verbose=False):
+    """
+    :return: Tuple of (loss, accuracy)
+    """
     criterion = nn.CrossEntropyLoss()
     total_loss, correct, total = 0.0, 0, 0
     net.eval()

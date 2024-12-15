@@ -1,6 +1,7 @@
 {
   "debugpy.debugJustMyCode": false,
   "python.analysis.includeAliasesFromUserFiles": true,
-  "python.defaultInterpreterPath": "~/Code/tesi/.venv/bin/python",
-  "python.analysis.importFormat": "absolute"
+  "python.defaultInterpreterPath": "../.venv/bin/python",
+  "python.analysis.importFormat": "absolute",
+  "mypy-type-checker.args": ["--config-file", "../pyproject.toml"],
 }

@@ -1,8 +1,10 @@
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Optional, TypedDict
+from typing import Awaitable, Callable, Optional, Iterable, TypedDict
 from .generated import peer_pb2
+
+ValidationFunction = Callable[[Iterable[peer_pb2.UpdateTransaction]], Iterable[bool]]
 
 
 class AbstractNetworkService(ABC):
@@ -58,7 +60,7 @@ class NetworkConfig(object):
 class NodeConfig(object):
     network: NetworkConfig
     kpriv: Optional[bytes] = None
-    validate_fn: Optional[Callable[[peer_pb2.UpdateTransaction], bool]] = None
+    validate_fn: Optional[ValidationFunction] = None
     become_validator: bool = False
 
 
