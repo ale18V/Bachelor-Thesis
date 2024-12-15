@@ -69,6 +69,11 @@ class FederationParticipant(object):
                 return
             del net
 
+        if block.header.height > 2 * config.NUM_ROUNDS:
+            # We are committing empty blocks as model is accurate and no txs are passing validation anymore
+            await self.stop()
+            return
+
         if not self.training.is_training:
             loop = asyncio.get_event_loop()
 

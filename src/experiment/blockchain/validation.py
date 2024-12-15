@@ -13,14 +13,14 @@ class DatasetAccuracyValidation(ValidationStrategy):
         self.valloader = valloader
         self.last_accuracy = 0.0
 
-    def validate_tx(self, data: UpdateTransaction):
+    def is_valid_tx(self, data: UpdateTransaction):
         net = serialization.deserialize_model(data)
         loss, accuracy = model.test(net=net, testloader=self.valloader)
-        return 1.5 * accuracy < self.last_accuracy
+        return 1.5 * accuracy > self.last_accuracy
 
     @override
     def validate(self, block: Iterable[UpdateTransaction]) -> Iterable[bool]:
-        return map(lambda tx: self.validate_tx(tx), block)
+        return map(lambda tx: self.is_valid_tx(tx), block)
 
     @override
     def update(self, net: torch.nn.Module) -> None:
