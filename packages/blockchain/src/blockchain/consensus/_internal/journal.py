@@ -1,6 +1,7 @@
 from typing import Iterable, Optional
 from blockchain.models import Commit, Vote, Message
 from blockchain.generated import peer_pb2
+from ...utils import get_tx_hash
 
 
 class MessageLog:
@@ -12,7 +13,14 @@ class MessageLog:
         self.prevotes = {}
         self.precommits = {}
         self.proposals = {}
+        self.tx_whitelist: dict[int, dict[bytes, int]] = {}
         self.tx_blacklist: dict[int, dict[bytes, int]] = {}
+
+    def count_prevotes(self, round: int) -> int:
+        return len(self.prevotes.get(round, []))
+
+    def count_precommits(self, round: int) -> int:
+        return len(self.precommits.get(round, []))
 
     def count_prevotes_for(self, round: int, hash: bytes | None) -> int:
         return len(list(filter(lambda vote: vote.target == hash, self.prevotes.get(round, []))))
@@ -44,16 +52,28 @@ class MessageLog:
     def add_prevote(self, prevote: peer_pb2.PrevoteMessage) -> bool:
         if prevote.round not in self.prevotes:
             self.prevotes[prevote.round] = set()
+            self.tx_whitelist[prevote.round] = {}
             self.tx_blacklist[prevote.round] = {}
 
         vote = Vote(prevote.pubkey, prevote.hash)
         if vote in self.prevotes[prevote.round]:
             return False
 
-        for tx in prevote.invalid_txs:
+        block = self.get_candidate(prevote.hash)
+        bad_txs = set(prevote.invalid_txs)
+        for tx in bad_txs:
             if tx not in self.tx_blacklist[prevote.round]:
                 self.tx_blacklist[prevote.round][tx] = 0
             self.tx_blacklist[prevote.round][tx] += 1
+
+        if block:
+            good_txs = set(map(lambda tx: get_tx_hash(tx), block.body.transactions)) - bad_txs
+            for txid in good_txs:
+                if txid not in self.tx_whitelist[prevote.round]:
+                    self.tx_whitelist[prevote.round][txid] = 0
+
+                if txid not in prevote.invalid_txs:
+                    self.tx_whitelist[prevote.round][txid] += 1
 
         self.prevotes[prevote.round].add(Vote(prevote.pubkey, prevote.hash))
         return True
@@ -75,7 +95,12 @@ class MessageLog:
     def get_invalid_txs(self, round: int, threshold: int) -> Iterable[bytes]:
         return map(lambda x: x[0], filter(lambda x: x[1] >= threshold, self.tx_blacklist.get(round, {}).items()))
 
+    def get_valid_txs(self, round: int, threshold: int) -> Iterable[bytes]:
+        return map(lambda x: x[0], filter(lambda x: x[1] >= threshold, self.tx_whitelist.get(round, {}).items()))
+
     def reset(self) -> None:
         self.prevotes = {}
         self.precommits = {}
         self.proposals = {}
+        self.tx_whitelist = {}
+        self.tx_blacklist = {}

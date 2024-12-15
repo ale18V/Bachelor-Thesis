@@ -1,4 +1,4 @@
-from .utils import get_tx_hash
+from .utils import get_tx_hash_hex
 import grpc
 from typing import Any
 import loguru
@@ -85,7 +85,7 @@ class NodeServer(NodeServicer):
     async def AdvertiseTransaction(self, request: peer_pb2.Transaction, context: grpc.ServicerContext) -> Empty:
         self.logger.debug(f"Received transaction: {request}")
         if not self.crypto.verify_transaction(request):
-            self.logger.error(f"Transaction {get_tx_hash(request)[:8]} is not valid")
+            self.logger.error(f"Transaction {get_tx_hash_hex(request)[:8]} is not valid")
             return Empty()
         not_dup = self.mempool.add(request)
         if not_dup:

@@ -6,7 +6,7 @@ from dependency_injector.wiring import Provide, inject
 from statemachine import Event, State, StateMachine
 from blockchain.server import AbstractMempoolService
 from blockchain.services import NodeService
-from blockchain.utils import get_tx_hash
+from blockchain.utils import get_tx_hash, get_tx_hash_hex
 from ...services._internal.messages import MessageService
 from .context import TendermintContext
 from .timeout import Timeout, TimeoutManager
@@ -19,7 +19,7 @@ from ...models import (
     AbstractBlockchainService,
     AbstractNetworkService,
 )
-from ...generated.peer_pb2 import Block, ProposeBlockRequest, PrecommitMessage, PrevoteMessage
+from ...generated.peer_pb2 import Block, ProposeBlockRequest, PrecommitMessage, PrevoteMessage, Transaction
 from loguru import logger
 import loguru
 from ...container import Container
@@ -46,8 +46,11 @@ class Tendermint(StateMachine):
     rule3 = PREVOTE.to(PRECOMMIT) | PRECOMMIT.to(PRECOMMIT)
     rule4 = PRECOMMIT.to(PROPOSE)
     rule5 = PREVOTE.to(PRECOMMIT)
-    receive_precommit = Event(rule4)
-    receive_prevote = Event(rule3 | rule5)
+    rule_timeout_prevote = PREVOTE.to(PREVOTE)
+    rule_timeout_precommit = PRECOMMIT.to(PRECOMMIT)
+
+    receive_precommit = Event(rule4 | rule_timeout_precommit)
+    receive_prevote = Event(rule3 | rule5 | rule_timeout_prevote)
     receive_proposal = Event(rule1 | rule2)
     timeout_precommit = Event(PRECOMMIT.to(PROPOSE))
     timeout_prevote = Event(PREVOTE.to(PRECOMMIT))
@@ -142,13 +145,6 @@ class Tendermint(StateMachine):
                 self.logger.debug(f"Invalid txs: {"\n".join([itx.hex()[:8] for itx in message.invalid_txs])}")
                 await self.network.broadcast_prevote(message)
                 await self.receive_prevote(message)
-
-                invalid_txs = list(self.messages.get_invalid_txs(message.round, self.service.inv_threshold))
-                if invalid_txs:
-                    self.logger.warning(f"Removing txs {[tx.hex()[:8] for tx in invalid_txs]}")
-                    for txhash in invalid_txs:
-                        if self.mempool.rm_id(txhash):
-                            self.logger.debug(f"Removed tx {txhash.hex()[:8]} from mempool")
             elif isinstance(message, peer_pb2.PrecommitMessage):
                 if not self.validate_precommit(message):
                     continue
@@ -178,10 +174,6 @@ class Tendermint(StateMachine):
     def on_enter_state(self, state: State, event: Event) -> None:
         self.logger.debug(f"Entering {state.value} because of {event.name}")
 
-    @PREVOTE.enter
-    def _enter_prevote(self) -> None:
-        self.timeout_manager.schedule(self.PREVOTE.name, self.context.height, self.context.round)
-
     @PRECOMMIT.enter
     def _enter_precommit(self) -> None:
         self.timeout_manager.schedule(self.PRECOMMIT.name, self.context.height, self.context.round)
@@ -194,24 +186,45 @@ class Tendermint(StateMachine):
             + ("I am the proposer" if is_proposer else f"Proposer is {self.context.proposer.hex()[:8]}")
             + f" - Threshold is {self.service.threshold}"
         )
+        invalid_txs = list(self.messages.get_invalid_txs(self.context.round - 1, self.service.inv_threshold))
+        if invalid_txs:
+            self.logger.warning(f"Removing txs {[tx.hex()[:8] for tx in invalid_txs]}")
+            for txhash in invalid_txs:
+                if self.mempool.rm_id(txhash):
+                    self.logger.debug(f"Removed tx {txhash.hex()[:8]} from mempool")
 
         if self.context.proposer == self.crypto_service.get_pubkey():
             # If the node is a proposer broadcast the proposed block
             block: Block
             if self.context.height == 1 and self.context.round == 0:
+                # Wait other nodes when starting the chain
                 try:
                     await self.loop.run_in_executor(ThreadPoolExecutor(max_workers=1), input, "Press enter to proceed")
                     print("Proceeding")
                 except Exception as e:
                     self.logger.info(f"Stopping {e}")
                     self.stop()
+
             if self.context.valid:
                 self.logger.info(f"Proposing latest valid block {(self.context.valid['id']).hex()}")
                 block = self.messages.get_candidate(self.context.valid["id"])  # type: ignore
 
             else:
-                self.logger.info("Creating new block from mempool")
-                block = self.node_service.craft_block(self.context.height)
+                valid_txs: list[Transaction] = list(
+                    filter(
+                        bool,  # type: ignore
+                        map(
+                            lambda id: self.mempool.get_id(id),
+                            self.messages.get_valid_txs(self.context.round - 1, self.service.threshold),
+                        ),
+                    )
+                )
+                if valid_txs:
+                    self.logger.info("Creating new block from valid txs")
+                    block = self.node_service.craft_block(self.context.height, valid_txs)
+                else:
+                    self.logger.info("Creating new block from mempool")
+                    block = self.node_service.craft_block(self.context.height, self.mempool.get())
 
             req = self.crypto_service.sign_proposal(self.context.round, block)
             # Proposer
@@ -271,28 +284,33 @@ class Tendermint(StateMachine):
 
     @rule5.cond
     @rule3.cond
-    def _boh(self, req: PrevoteMessage) -> bool:
+    def _is_prevote_quorum(self, req: PrevoteMessage) -> bool:
         return self.messages.has_prevote_quorum(req.round, req.hash, self.service.threshold)
 
-    @rule5.unless
-    @rule3.cond
-    def _boh2(self, req: PrevoteMessage) -> bool:
-        return bool(req.hash)
+    @rule5.cond
+    @rule3.unless
+    def _is_null_prevote(self, req: PrevoteMessage) -> bool:
+        return not bool(req.hash)
 
     rule4.cond(
         lambda req, machine: machine.messages.has_precommit_quorum(req.round, req.hash, machine.service.threshold)
     )
+
+    rule_timeout_prevote.cond(lambda req, machine: machine.messages.count_prevotes(req.round))
+    rule_timeout_precommit.cond(lambda req, machine: machine.messages.count_precommits(req.round))
 
     # ================== TRANSITIONS ================== #
     @rule1.on
     async def _on_rule1(self, req: ProposeBlockRequest) -> None:
         block_id = req.block.header.hash
         target: Optional[bytes] = block_id
-        invalid_txs = self.validation_service.validate_block(req.block)
+        invalid_txs = set(map(lambda tx: get_tx_hash(tx), self.validation_service.validate_block(req.block)))
         if invalid_txs:
             self.logger.error(
-                f"Block {block_id.hex()} with invalid txs received: {[get_tx_hash(x)[:8] for x in invalid_txs]}"
+                f"Block {block_id.hex()} with invalid txs received: {[id.hex()[:8] for id in invalid_txs]}"
             )
+            valid_txs = set(self.messages.get_valid_txs(req.round - 1, self.service.threshold))
+            invalid_txs = invalid_txs - valid_txs
 
         if invalid_txs or (self.context.locked and self.context.locked["id"] != target):
             target = None
@@ -306,11 +324,13 @@ class Tendermint(StateMachine):
         vr = req.block.header.valid_round
         block_id = req.block.header.hash
         target: Optional[bytes] = block_id
-        invalid_txs = self.validation_service.validate_block(req.block)
+        invalid_txs = set(map(lambda tx: get_tx_hash(tx), self.validation_service.validate_block(req.block)))
         if invalid_txs:
             self.logger.error(
-                f"Block {block_id.hex()} with invalid txs received {[get_tx_hash(x)[:8] for x in invalid_txs]}"
+                f"Block {block_id.hex()} with invalid txs received: {[id.hex()[:8] for id in invalid_txs]}"
             )
+            valid_txs = set(self.messages.get_valid_txs(req.round - 1, self.service.threshold))
+            invalid_txs = invalid_txs - valid_txs
 
         if invalid_txs or (
             self.context.locked and self.context.locked["round"] > vr and self.context.locked["id"] != target
@@ -353,6 +373,14 @@ class Tendermint(StateMachine):
         del self.context
         self.context = TendermintContext(height=self.service.height, validators=self.service.get_validators())
         self.messages.reset()
+
+    @rule_timeout_precommit.on
+    @rule_timeout_prevote.on
+    def _schedule_timeout(self, req: PrevoteMessage | PrecommitMessage) -> None:
+        if isinstance(req, PrevoteMessage):
+            self.timeout_manager.schedule(self.PREVOTE.name, req.height, req.round)
+        elif isinstance(req, PrecommitMessage):
+            self.timeout_manager.schedule(self.PRECOMMIT.name, req.height, req.round)
 
     # ================== TIMEOUTS ================== #
     @timeout_propose.unless

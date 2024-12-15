@@ -6,7 +6,7 @@ import loguru
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.message import Message
 from blockchain.constants import GRACE_PERIOD, NUM_CONNECTED_PEERS, PING_TIMEOUT
-from blockchain.utils import after_timeout, get_tx_hash
+from blockchain.utils import after_timeout, get_tx_hash_hex
 from blockchain.generated import peer_pb2_grpc, peer_pb2
 from blockchain.models import AbstractNetworkService, NetworkConfig
 
@@ -112,7 +112,7 @@ class NetworkService(AbstractNetworkService):
         async def send_tx(connection: Connection, tx: peer_pb2.Transaction, *args: Any, **kwargs: Any) -> None:
             await connection.AdvertiseTransaction(tx, *args, **kwargs)
 
-        return self.loop.create_task(self._broadcast(send_tx, tx, f"Broadcasted tx {get_tx_hash(tx)}"))
+        return self.loop.create_task(self._broadcast(send_tx, tx, f"Broadcasted tx {get_tx_hash_hex(tx)}"))
 
     def broadcast_proposal(self, request: peer_pb2.ProposeBlockRequest) -> Awaitable[None]:
         @self.with_close

@@ -23,6 +23,10 @@ class MempoolService(AbstractMempoolService):
         return random.sample(list(self.mempool.values()), quantity)
 
     @override
+    def get_id(self, tx_id: bytes) -> Optional[Transaction]:
+        return self.mempool.get(tx_id, None)
+
+    @override
     def rm(self, tx: Transaction) -> bool:
         txhash = hashlib.sha256(tx.SerializeToString(deterministic=True)).digest()
         return self.rm_id(txhash)

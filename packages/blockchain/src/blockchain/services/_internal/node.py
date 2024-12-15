@@ -1,6 +1,6 @@
 import hashlib
 import time
-from typing import Awaitable, Optional
+from typing import Awaitable, Iterable, Optional
 import loguru
 
 from ...constants import CONSTANT_REWARD_QUANTITY
@@ -11,6 +11,7 @@ from ...generated.peer_pb2 import (
     CoinbaseTransaction,
     Reward,
     StakeTransaction,
+    Transaction,
     TransactionData,
     UpdateTransaction,
 )
@@ -45,8 +46,8 @@ class NodeService(object):
         self.logger.debug(f"Checking if {pk!r} is a validator: {res}")
         return res
 
-    def craft_block(self, height: int) -> Block:
-        transactions = self.mempool.get()
+    def craft_block(self, height: int, txs: Iterable[Transaction]) -> Block:
+        transactions = list(txs)
         # for i, tx in enumerate(transactions):
         #     if not self.validation.validate_tx(tx):
         #         self.logger.warning(f"Invalid transaction in mempool: {tx}")

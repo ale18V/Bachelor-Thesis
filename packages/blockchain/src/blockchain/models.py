@@ -173,6 +173,10 @@ class AbstractMempoolService(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_id(self, tx_id: bytes) -> Optional[peer_pb2.Transaction]:
+        raise NotImplementedError
+
+    @abstractmethod
     def rm(self, tx: peer_pb2.Transaction) -> bool:
         raise NotImplementedError
 
@@ -241,7 +245,7 @@ class AbstractCryptoService(ABC):
 
     @abstractmethod
     def sign_prevote(
-        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[peer_pb2.Transaction]] = None
+        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[Iterable[bytes]] = None
     ) -> peer_pb2.PrevoteMessage:
         pass
 

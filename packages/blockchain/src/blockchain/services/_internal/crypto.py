@@ -1,11 +1,11 @@
-import hashlib
 import time
-from typing import Optional, override
+from typing import Iterable, Optional, override
 from blockchain.models import AbstractCryptoService, Message
 from blockchain.generated import peer_pb2
 from ecdsa import SigningKey, VerifyingKey, NIST256p  # type: ignore
 import ecdsa
 from copy import deepcopy
+import typing
 
 
 class CryptoService(AbstractCryptoService):
@@ -25,14 +25,9 @@ class CryptoService(AbstractCryptoService):
 
     @override
     def sign_prevote(
-        self, height: int, round: int, hash: bytes | None, invalid_txs: Optional[list[peer_pb2.Transaction]] = None
+        self, height: int, round: int, hash: bytes | None, invalid_tx_ids: Optional[Iterable[bytes]] = None
     ) -> peer_pb2.PrevoteMessage:
-        invalid_txs_ids = (
-            [hashlib.sha256(tx.SerializeToString(deterministic=True)).digest() for tx in invalid_txs]
-            if invalid_txs
-            else []
-        )
-        msg = peer_pb2.PrevoteMessage(height=height, round=round, hash=hash, invalid_txs=invalid_txs_ids)
+        msg = peer_pb2.PrevoteMessage(height=height, round=round, hash=hash, invalid_txs=invalid_tx_ids)
 
         msg.signature = self._kpriv.sign_deterministic(msg.SerializeToString(deterministic=True))
         msg.pubkey = self._kpub
@@ -58,10 +53,13 @@ class CryptoService(AbstractCryptoService):
         copy.ClearField("signature")
         copy.ClearField("pubkey")
         try:
-            return vk.verify(
-                message.signature,
-                copy.SerializeToString(
-                    deterministic=True,
+            return typing.cast(
+                bool,
+                vk.verify(
+                    message.signature,
+                    copy.SerializeToString(
+                        deterministic=True,
+                    ),
                 ),
             )
         except ecdsa.BadSignatureError:
@@ -86,9 +84,12 @@ class CryptoService(AbstractCryptoService):
     def verify_transaction(self, tx: peer_pb2.Transaction) -> bool:
         vk = VerifyingKey.from_string(tx.public_key, curve=NIST256p)
         try:
-            return vk.verify(
-                tx.signature,
-                tx.data.SerializeToString(deterministic=True),
+            return typing.cast(
+                bool,
+                vk.verify(
+                    tx.signature,
+                    tx.data.SerializeToString(deterministic=True),
+                ),
             )
         except ecdsa.BadSignatureError:
             return False

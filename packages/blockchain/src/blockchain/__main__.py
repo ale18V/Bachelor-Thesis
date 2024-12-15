@@ -39,7 +39,7 @@ def run(port: int, peers: list[str], become_validator: bool, private_key: str) -
             network=NetworkConfig(port=port, peers=set(peers) if peers else set([BOOTSTRAP_NODE_ADDRESS])),
             kpriv=bytes.fromhex(private_key) if private_key else None,
             become_validator=become_validator,
-            validate_fn=lambda *args: True,
+            validate_fn=lambda txs: map(lambda tx: True, txs),
         )
     ).run()
 

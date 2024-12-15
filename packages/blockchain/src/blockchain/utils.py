@@ -58,5 +58,9 @@ async def async_input(prompt: Optional[str] = None) -> str:
         return ""
 
 
-def get_tx_hash(tx: peer_pb2.Transaction) -> str:
+def get_tx_hash_hex(tx: peer_pb2.Transaction) -> str:
     return hashlib.sha256(tx.SerializeToString(deterministic=True)).hexdigest()
+
+
+def get_tx_hash(tx: peer_pb2.Transaction) -> bytes:
+    return hashlib.sha256(tx.SerializeToString(deterministic=True)).digest()
