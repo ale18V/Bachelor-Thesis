@@ -1,0 +1,174 @@
+\section{Introduction}\label{sec:blockchain-fl}
+In this section we would like to explore the possibility of integrating blockchain technology with federated learning.
+As we mentioned in \ref{sec:challenges-vanilla-fl} centralization and lack of incentives are big problems in
+federated learning. In \ref{subsec:advantages-blockchain-fl} we will discuss how implementing it on top of a
+blockchain network helps solve these problems. In \ref{subsec:challenges-blockchain-fl} we will instead discuss
+the novel challenges and complexities introduced by mixing these two technologies.
+
+\subsection{Architecture}
+First of all let's discuss the workflow of the system and the possible implementation choices.
+Note that this is not a client-server model anymore. Thus the parties to which we referred as
+\textit{clients} in \ref{sec:vanilla-fl} will now be referred to as \textit{nodes} or \textit{devices}:
+\begin{enumerate}
+  \item The global model does not need to be pulled from a central server.
+    Each node can retrieve it by inspecting the blockchain.
+  \item The nodes behaves as in \ref{sec:clients-and-datasets}: they train the local model on their own data.
+  \item Once training is finished, the local update is broadcasted on the peer to peer network.
+  \item The update is put inside a block and becomes part of the blockchain.
+  \item When a new block is broadcasted to the network the clients update their model accordingly.
+\end{enumerate}
+
+There are many implementation details that can be explored in more detail about this architecture and that's
+exactly what will be done now.
+
+\paragraph{Global Model} The global model will always be retrievable from the blockchain as all updates are
+recorded immutably.
+Thus one could reconstruct the global model by simply inspecting the blockchain history starting from the genesis block.
+In practice clients would just store it somewhere and gradually update it as new blocks are received.
+Clearly it is unreasonable to expect nodes to be online continuously, as the devices participating in
+federated learning often lack this capability \ref{sec:vanilla-fl}.
+As a matter of fact when nodes come back online they can query other nodes in the network for the blocks
+they're missing and use those to perform the necessary updates.
+
+\paragraph{Block creation} This point was intentionally very vague in the presented overview.
+This is because it's heavily implementation-dependant: in a PoW blockchain the responsibility of
+creating new blocks and pooling updates is left to miners; in a PoS blockchain, the responsibility would fall
+to an elected node.
+Furthermore, should the updates be validated? And if so who should be responsible for doing so?
+Should the updates be stored singularly inside the block or only their aggregated value?
+Those question require careful analysis of the task at hand so it is not possible to provide a clear-cut
+answer beforehand.
+
+\subsection{Advantages of blockchain integration}\label{subsec:advantages-blockchain-fl}
+\subsubsection{Decentralized Aggregation}
+Decentralized aggregation as described in the last section, removes the need for a central server to handle
+model updates. This nullifies the concerns which were reaised in \ref{sec:fl-centralization}: there is no
+single point of
+failure anymore and the nodes do not need to trust anyone as they can verify the updates independently.
+
+\subsubsection{Incentivizing Participation}
+Implementing an incentive mechanism is not a possibility exclusive to blockchain.
+It is trivial to implement one in vanilla federated learning too:
+simply let every client have a balance on the central server and have the latter update it when contributions
+are received.
+
+However this approach comes with the problems of centralization that have already been explained: clients
+have no guarantee that the server will distribute rewards fairly.
+
+On the contrary a blockchain can be used to develop a transparent incentive mechanism, agreed upon by all
+nodes via the consensus algorithm such as demonstrated in \cite{FlwrBC}.
+
+\subsubsection{Reputation and Accountability}
+Permanently recording contributions of each client in a transparent manner allows the development of a trustless
+reputation system, where clients that consistently provide high-quality updates can build
+credibility.
+
+Conversely, malicious or unreliable contributors can be identified and penalized,
+enhancing model robustness and accountability.
+The reputation of nodes could also be integrated with the reward mechanism such that higher quality contributors
+are favored with more rewards whereas malicious contributors are penalized.
+
+\subsection{Challenges of Blockchain-Integrated FL}\label{subsec:challenges-blockchain-fl}
+\subsubsection{Model Size and Scalability}
+Integrating blockchain with federated learning introduces scalability challenges, particularly
+concerning model size. Storing large models or frequent updates directly on the blockchain is
+impractical, as it would overwhelm the network.
+
+Here are some possible (non-exclusive) mitigations to this problem:
+\begin{itemize}
+  \item Only store references to model updates on chain and store the data somewhere else.
+    This doesn't necessarily mean that data should be stored centrally as a distributed storage system may be
+    used such as IPFS.
+    This would reduce the load on the blockchain but would introduce new problems such as data integrity and security.
+  \item Have some nodes specialized in storage via Proof of Storage. This is the solution that is proposed in
+    \cite{CoinAI}.
+  \item Keep storing the updates on-chain and eventually prune old blocks when the storage amount exceeds the
+    chain capabilities.
+    This approach introduces non-trivial technical problems such as ensuring that all nodes consent and
+    become aware of the pruning.
+  \item Split nodes into lightweight and full nodes such as in \ref{sec:bitcoin-nodes}.
+  \item Use model compression to reduce data size.
+\end{itemize}
+As discussed in \ref{sec:challenges-vanilla-fl} also here it is vital to use a \textit{relaxed} block
+frequency and perform more computation locally.
+In any case, even after performing the due optimizations, integrating blockchain in a federated learning task
+may not always be possible if we're dealing with devices with very limited storage capabilities.
+
+\subsubsection{Increased Overhead}
+Blockchain networks inherently introduce latency due to the need for consensus and block validation.
+This latency can slow down the learning task, as each model update must wait for
+confirmation on the blockchain before it is available for aggregation. As a result,
+blockchain-integrated federated learning may struggle to meet real-time or near-real-time
+model update requirements.
+
+Another situation which would introduce a huge overhead would be forking.
+Forks are common in public blockchain networks, particularly those using
+Proof of Work (PoW) consensus. When a fork occurs, different parts of the network temporarily
+diverge, which means some nodes will train local updates on a model whereas some other nodes will do so on a
+different modal.
+Once the fork is resolved one of the two divergenct models will have to be discarded, leading to wasted computation.
+Thus minimizing forking risks is essential, potentially requiring a shift to alternative consensus mechanisms
+like Proof of
+Stake (PoS) or consortium-based approaches.
+
+\subsection{Validation}
+We previously said that, because blockchain allows updates to be transparent to all participants, no trust is
+required as updates can be validated independently.
+This is true if we assume that we are able to integrate validation in the consensus mechanism; however this
+is not trivial to achieve.
+
+Suppose that nodes perform independent validation on the updates present in newly created blocks.
+This would break the consensus mechanism: some nodes may consider a block valid whereas other nodes may not.
+
+We would get to the same conclusion even if we assigned validation to a subset of nodes (e.g the ones
+responsible for block creation).
+In order for validation to be included in the consensus mechanism it needs to be deterministic and consistent
+on all nodes.
+However this introduces a new problem: a malicious actor that is able to see the validation dataset would be
+able to generate a
+backdoor in the model \cite{backdoorFL}.
+This problem can be addressed by using a DON (Decentralized Oracle Network) that can queried by the nodes to
+get a "yes" or "no" answer on the validity of the update \cite{Prof}.
+This however raises the question of who should provide the validation dataset and the trustworthiness of the DON.
+
+\section{Discussion of implementation choices}\label{sec:bfl-implementation}
+Before moving on to our implementation \ref{chap:implementation} we would like to discuss pros and cons of
+different implementation choices. Refer to \ref{sec:blockchain-classification} for an explaination of the
+technical terms.
+
+\subsection{Consensus Mechanism} Proof of Work as consensus mechanism has been used in works such as BlockFL
+\cite{BlockFL}.
+However PoW is not a good fit for our use case as it is very energy consuming and has a higher risks of
+forking compared to other consensus mechanisms.
+Proof of stake is more promising because it is energy efficient which is a strong requirement when dealing
+with low-power devices such as the ones participating in federated learning.
+Consortium-based consensus mechanisms are more centralized but are the most natural choice if our federated
+learning task is private or multi-layer.
+For instance in the case of a task distributed across hospitals, the hospitals could be the members of the consortium.
+
+\subsection{Public or Private}
+Let's first consider the fact that implementing a robust blockchain is by no means an easy feat and still a
+field of ongoing research. Leveraging a public blockchain for federated learning tasks would allow to reuse
+existing and battle-tested technology. Furthermore public blockchains are more decentralized and secure than
+private chains due to their higher level of participation.
+However their cost may be prohibitive for this use case.
+Let's take ethereum as an example: the cost of storing 256 bits on chain is 20,000 gas according to the white
+paper \cite{Ethereum}. This makes the cost of a kilobyte worth of storage 640,000 gas, which is about 20 USD
+at the time of writing.
+This makes storing weights on a public blockchain unfeasible.
+
+Another aspect to consider is access-control: public blockchains do not offer access control mechanisms out of the box.
+Although, smart contracts could be used to implement application-layer access control, data would still be
+stored on chain and be accessible to everyone.
+If the federated learning task is private then a private blockchain is the most natural choice.
+
+\subsection{Using smart contracts} Smart contracts could be used to implement the logic of federated learning
+directly on chain. This includes updating the model, validating the updates, rewarding the nodes and so on.
+Nowadays, the existing frameworks for creating private blockchains, such as Cosmos or Hyperledger Fabric,
+come with smart contract support.
+However, following an approach similar to that of bitcoin \ref{sec:bitcoin} with limited or no scripting
+capabilities at all could be more lightweight. This is especially considering that a private chain reserved
+to federated learning would not need the power of smart contracts.
+As a matter of fact the implementation presented in this document is not based on smart contracts, as we'll
+see in \ref{chap:implementation}.
+

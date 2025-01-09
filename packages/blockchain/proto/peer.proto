@@ -1,0 +1,133 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+
+service Node {
+  rpc AdvertisePeer(NetworkAddress) returns (google.protobuf.Empty) {};
+  rpc RequestPeers(google.protobuf.Empty) returns (RequestPeersResponse) {};
+  rpc AdvertiseTransaction(Transaction) returns (google.protobuf.Empty) {};
+  rpc ProposeBlock(ProposeBlockRequest) returns (google.protobuf.Empty) {};
+  rpc RequestBlock(BlockRequest) returns (BlockResponse) {};
+  rpc AdvertisePrevote(PrevoteMessage) returns (google.protobuf.Empty) {};
+  rpc AdvertisePrecommit(PrecommitMessage) returns (google.protobuf.Empty) {};
+  rpc RequestBlockchain(google.protobuf.Empty) returns (BlockchainMessage) {};
+  rpc RequestBalance(BalanceRequest) returns (BalanceResponse) {};
+  rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty) {};
+}
+
+message RequestPeersResponse {
+  repeated NetworkAddress addresses = 1;
+}
+
+message BlockchainMessage {
+  repeated Block blocks = 1;
+}
+
+message BalanceRequest {
+  optional bytes address = 1;
+}
+
+message BalanceResponse {
+  optional uint64 balance = 1;
+}
+
+message ProposeBlockRequest {
+  Block block = 1;
+  uint64 round = 4;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+message PrevoteMessage {
+  optional bytes hash = 1;
+  uint64 height = 5;
+  uint64 round = 6;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+
+message PrecommitMessage {
+  optional bytes hash = 1;
+  uint64 height = 5;
+  uint64 round = 6;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+message BlockRequest {
+  bytes hash = 1;
+}
+
+message BlockResponse {
+  optional Block block = 1;
+}
+
+/** Peer addresses in form of host:port */
+message NetworkAddress {
+  string address = 1;
+}
+
+/** Block format */
+message Block {
+  BlockHeader header = 1;
+  BlockBody body = 2;
+}
+
+/** Block header contains metadata */
+message BlockHeader {
+  uint64 height = 1;
+  int64 valid_round = 4;
+  uint64 timestamp = 2;
+  bytes parent = 3;
+  bytes hash = 7;
+}
+
+/** Block body is a list of transactions */
+message BlockBody {
+  repeated Transaction transactions = 1;
+}
+
+/** General transaction format */
+message Transaction {
+  bytes public_key = 1;
+  bytes signature = 2;
+  uint32 timestamp = 3;
+  TransactionData data = 5;
+}
+
+message TransactionData {
+  oneof body {
+    CoinbaseTransaction coinbase = 6;
+    StakeTransaction stake = 8;
+    UpdateTransaction update = 9;
+  }
+}
+
+/** A model update transaction */
+message UpdateTransaction {
+  bytes block = 2;
+  repeated bytes data = 1;
+  optional string metadata = 3;
+}
+
+message Reward {
+  bytes address = 1;
+  uint64 quantity = 2;
+}
+
+message CoinbaseTransaction {
+  repeated Reward rewards = 1;
+}
+
+message StakeTransaction {
+  uint64 quantity = 2;
+}
+
+message StakeAddress {
+  bytes address = 1;
+  uint64 quantity = 2;
+}
+
+
+message Vote {
+  bytes address = 1;
+  uint64 quantity = 3;
+}

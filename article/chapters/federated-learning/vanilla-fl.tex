@@ -1,0 +1,170 @@
+\section{Vanilla Federated Learning}\label{sec:vanilla-fl}
+Federated learning was first introduced by google researchers McMahan et al. in 2016 \cite{McMahan2016}.
+This version is oftern reffered to as vanilla federated learning and it was initially applied to
+train keyboard prediction models while prioritizing user privacy. Instead of transmitting raw data, devices
+locally train machine learning models and share only updated model parameters with a central server. This
+server aggregates these updates to refine a global model, ensuring data remains on devices and aligning with
+privacy and legal requirements.
+
+\subsection{Use Cases}
+
+Federated learning is well-suited for scenarios involving sensitive, decentralized data. The original use
+case, keyboard prediction, highlights its ability to leverage automatically labeled data generated in
+abundance by users. Another example is the automotive industry, where models for predicting battery life can
+be trained without centralizing data such as location, speed, and driving patterns \cite{TESLA}. Federated
+learning's privacy-preserving approach is critical in such applications.
+
+Major tech companies have adopted federated learning for various purposes:
+\begin{itemize}
+  \item Apple employs it to enhance Siri's voice recognition \cite{apple_fl}.
+  \item Google uses it in Gboard for keyboard suggestions and in Google Assistant for speech recognition
+    \cite{google_fl}.
+  \item Nvidia has developed FLARE, a framework for federated learning \cite{FLARE}.
+\end{itemize}
+
+\subsection{Architecture}
+
+The vanilla federated learning workflow involves the following steps:
+\begin{enumerate}
+  \item  The central server selects participating clients for a training round and sends them the updated global model.
+  \item  Clients train the model on local data.
+  \item  Updated model parameters are sent back to the server.
+  \item  The server aggregates the updates to improve the global model.
+  \item  The updated global model is distributed to the clients.
+  \item  The process repeats until convergence or for a predefined number of rounds.
+  \item  This architecture enables collaboration across distributed datasets while minimizing privacy risks.
+\end{enumerate}
+
+\subsubsection{Clients and datasets} \label{sec:clients-and-datasets}
+As stated in the original paper \cite{McMahan2016}, federated learning operates on a massively distributed
+scale, where the number of clients
+is large and the amount of data per client is on average of moderate to small size.
+Even though, in a usual federated learning scenario clients are every-day devices (e.g., smartphones, IoT,
+devices, and personal computers)
+with limited computing power, the small amount of local data makes the local training process relatively free.
+
+\subsubsection{Central Server for Aggregation}
+The central server orchestrates the process by sampling clients, collecting updates, and aggregating them
+into a global model.
+It operates without accessing raw data, instead, working solely with model updates, which it redistributes
+for further training.
+This coordination ensures model consistency and adheres to privacy standards \cite{Li2020}.
+
+\subsubsection{Aggregation Algorithm}
+The aggregation algorithm used by the central server plays a crucial role in the performance of the resulting model.
+One of the most common algorithms is the one introduced in the original paper: Federated Averaging (FedAvg)
+\cite{McMahan2016}.
+Let's define mathematically the federated learning problem.
+Suppose that we have \(K\) clients, each with a dataset \(D_k\) of size \(n_k\). The loss function of each
+client is \(f_k\) and we want to minimize the globsl loss function:
+\[
+  f(w) = \sum_{k=1}^{K} \frac{n_k}{n} f_k(w)
+\]
+
+We could use a simple batch gradient descent as described in \ref{sec:batch-gradient-descent} to accomplish the task.
+The central server would then aggregate the weights and perform the update as:
+\[
+  w_{t+1} = w_t - \eta \nabla f(w_t) = w_t - \eta \sum_{k=1}^{K} \frac{n_k}{n} \nabla f_k(w_t)
+\]
+
+However, this in practice not feasible for two reasons:
+\begin{enumerate}
+  \item We cannot rely on the fact that every client is always available.
+  \item This approach would likely end up having a slow convergence and communication overhead.
+\end{enumerate}
+Federated Averaging is a slight variation of this algorithm and it introduces three parameters:
+\begin{enumerate}
+  \item The batch size \(B\)
+  \item The number of local epochs \(E\)
+  \item The fraction of clients sampled \(C\).
+\end{enumerate}
+The server samples \(C\) clients at each round and each client uses performs local training
+\hyperref[sec:minibatch-gradient-descent]{minibatch gradient descent} with batch size of $B$.
+The client performs \(E\) training rounds locally before sending the results to the server.
+As we said in \ref{sec:clients-and-datasets} the per-client cost of computation is relatively low.
+Thus this algorithm introduces \(E\) to provide a mechanism to reduce communication by using more computation:
+by performing more rounds locally the number of communication rounds with the server is reduced.
+
+\subsection{Advantages of Vanilla FL}
+
+\subsubsection{Enhanced Privacy}
+The choice of keeping data local to the device reduces the risk of breaches and data leaks restricting the
+attack surface to the device itself only.
+This approach also complies with privacy regulations like GDPR\cite{GDPR} or CCPA\cite{CCPA}.
+However this does not mean that federated learning is a silver bullet for privacy concerns.
+Local gradients can still leak information depending on the model architecture and the aggregation algorithm used.
+In \cite{MultyPartyAggregation} the authors show how a model using words as features may be subsceptible to
+information leakage from gradients.
+They propose multiple solutions:
+\begin{itemize}
+  \item Each client opens a bidirectional channel with all the other clients to generate masks complementary masks.
+    This way, clients add the mask to their updates so that information leakage is minimized. And when the
+    servers aggregates the weights the masks cancel out.
+  \item Multiple architectures based on asymmetric encryption are explored.
+\end{itemize}
+However both of these approaches do not scale well as the number of clients grows because every client should
+communicate with every other client.
+Another solution is simply adding noise to the data but this comes with the tradeoff of reducing the model's accuracy.
+A more promising path to be explored is to use homomorphic encryption which allows to perform mathematical
+operations on encrypted data.
+
+\subsubsection{Scalability} By distributing training across numerous clients, federated learning avoids
+central data processing bottlenecks and accommodates large-scale systems. This scalability is particularly
+beneficial for applications involving IoT devices and smartphones \cite{Li2020}.
+
+\subsection{Challenges of Vanilla FL} \label{sec:challenges-vanilla-fl}
+
+\subsubsection{Heterogeneous Data}
+Unlike centralized training, where datasets are usually more homogeneus and can be analyzed beforehand
+\textit{normalized},
+In the case of federated learning data distributions often varies significantly across clients, posing
+challenges for model generalization.
+In technical terms this means that the data can be extremely unbalanced (meaning some clients may have plenty while
+others very few) and that the \textbf{IID} assumption which we said was at the core of supervised learning in
+\ref{sec:assumptions-supervised-learning} holds no more.
+However, as shown in the original article \cite{McMahan2016}, federated learning proved to be robust to these
+perturbations.
+
+\subsubsection{Etherogeneous Clients}
+Another aspect to take into account, especially when developing aggregation algorithms, and architecturing the network
+is that clients engaging in federated learning may be very diverse and have different energy and computation
+capabilities.
+Consider FederatedAveraging: the number of local epochs \(E\) is a parameter that is the same for all clients.
+A smartphone of latest generation surely has more computational capabilities than a IIOT device such as a fridge.
+Tuning this parameter is challengenging and may lead to suboptimal results in any case.
+
+\subsubsection{Low-Quality or Malicious Contributions}
+Non-malicious but low-quality updates threaten the accuracy of the global model.
+There may also be malicious clients trying to inject a backdoor into the global model, trying to manipulate
+its predictions in a small subset of the parameters \cite{backdoorFL}.
+These two problems can be mitigated by using a \textbf{private} validation dataset on the server and
+rejecting all updates that do not satisfy it.
+However this introduces two new challenges:
+\begin{enumerate}
+  \item Collecting the validation dataset.
+  \item Making sure that this dataset does not introduce any bias or filter out high quality contributions.
+\end{enumerate}
+
+\subsubsection{Centralization} \label{sec:fl-centralization}
+Clients may not want to federate under a central server due to trust issues.
+
+The central server represents a single point of failure and if it was to be compromised,
+all members of the federated learning process would be at risk of receiving poisoned global models.
+Connecting to the previous section, clients may not know whether the server is validating the
+updates or may not trust the validation performed on them.
+Thus clients who are concerned with the security of the model likely would likely not participate.
+
+\subsubsection{Communication}
+As stated alredy, clients participating in federatd learning may be every-day devices such as smartphones or
+IIOT devices, where bandwidth and internet access may be limited or expensive.
+Federated Learning must be resilient to client crashes or communication failures and must require as less communication
+and bandwitdth usage as possible \cite{Li2020}.
+FedAvg already provides parameters to reduce communication overhead but the state of the art is still far from perfect.
+Another improvement that can be exploited to reduce bandwidth usage is to use a model compression algorithm
+(see \cite{ATOMO})
+
+\subsubsection{Lack of Incentives}
+Client participation is voluntary, and without incentives, many devices may have no reason to join the process.
+Establishing a framework to reward contributions—through compensation or recognition—can improve
+participation and data diversity \cite{Li2020}.
+

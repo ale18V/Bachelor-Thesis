@@ -1,0 +1,43 @@
+[project]
+version = "0.1.0"
+name="Thesis"
+description = "My bachelor thesis project"
+authors = [{name = "ale18V", email = "alebombarda@icloud.com"}]
+readme = "README.md"
+dependencies = [
+    "blockchain",
+    "flwr-datasets[vision]>=0.5.0",
+    "flwr[simulation]>=1.14.0",
+    "torch>=2.5.1",
+    "torchvision>=0.20.1",
+]
+
+[tool.flwr.app]
+publisher = "ale"
+
+[tool.flwr.app.components]
+serverapp = "src.experiment.vanilla.server:server"
+clientapp = "src.experiment.vanilla.client:client"
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 10
+
+[tool.flwr.federations.local-simulation-gpu]
+options.num-supernodes = 10
+options.backend.client-resources.num-cpus = 2 # each ClientApp assumes to use 2CPUs
+options.backend.client-resources.num-gpus = 0.2 # at most 5 ClientApp will run in a given GPU
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+blockchain = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "aiomonitor>=0.7.1",
+    "ray>=2.40.0",
+]

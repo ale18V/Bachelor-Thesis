@@ -1,0 +1,103 @@
+\subsection{Context of the Thesis}\label{chap:contextandobjectives}
+Advancements in technology have driven a data-centric shift across industries such as healthcare, finance,
+smart cities, and the Internet of Things (IoT). This growing reliance on data has introduced significant
+challenges in privacy, security, and scalability, necessitating innovative solutions. This thesis explores
+the intersection of two emerging paradigms—Federated Learning (FL) and Blockchain technology—as a potential
+means to address these challenges.
+
+\textbf{Federated Learning} has emerged as a transformative approach to machine learning by enabling
+collaborative model training without the need to share raw data. This is achieved by keeping relevant
+computation local to devices and only sharing updates with the interested party.
+This preserves data privacy while still achieving high-performance learning. Despite its benefits, FL faces
+critical challenges, including reliance on a central server, susceptibility to malicious participants, and a
+lack of transparency in the training process.
+
+\textbf{Blockchain technology}, initially developed as the backbone for cryptocurrencies like Bitcoin,
+provides a decentralized, secure, and transparent framework for managing data and operations among untrusted
+parties. With its core features—such as consensus mechanisms, immutability, and smart contracts—Blockchain
+has demonstrated value in sectors ranging from finance to supply chain management. However, its scalability
+limitations and resource-intensive operations can hinder its applicability in dynamic environments.
+
+Integrating FL and Blockchain presents a promising avenue for overcoming the limitations of both
+technologies. Blockchain's decentralization can eliminate the dependency on a central server in FL, while its
+transparency and consensus protocols enhance trust and accountability. Conversely, FL's distributed learning
+capabilities reduce the need for raw data storage on the Blockchain, mitigating its scalability concerns.
+
+This thesis is motivated by real-world challenges such as:
+\begin{itemize}
+  \item Ensuring privacy and security in data-sharing across regulated sectors like healthcare and finance.
+  \item Establishing trust in collaborative environments where participants may not fully trust each other,
+    such as in decentralized IoT systems.
+\end{itemize}
+
+While Federated Learning and Blockchain are an ongoing field of research and a fair amount of articles have
+been published about these topics,
+their integration has been underexplored. Combining the two technologies introduces novel challenges
+including communication privacy and efficiency, synchronism of updates, security and scalability.
+
+Through the design and evaluation of a Blockchain-enhanced Federated Learning framework, this thesis aims to
+provide a foundational understanding of the two technologies and explore the challanges and opportunities in
+context of privacy, trust, and scalability. The following section outlines the specific objectives of this
+thesis, which are derived from this contextual foundation.
+
+\subsection{Objectives of the Thesis}
+
+This document aims to explore the feasibility and practicality of implementing a federated learning system on
+a blockchain network. The contributions of this work are threefold:
+
+\paragraph{Explore the technologies}
+The thesis seeks to provide to the reader a foundational understanding of both Federated Learning and Blockchain
+technologies. We will try to be as thorough as possible, within the limits of the purposes of this document,
+highlighting the individual strengths, weaknesses, and potential areas of
+application of both technologies.
+
+\paragraph{Exploring the integration}
+After providing an understanding of the technologies and their strengths and weaknesses we want to discuss
+the advantages and challenges that arise when joining them.
+
+We will discuss them in depth in the coming chapters but as an anticipation, some of the advantages include:
+\begin{itemize}
+  \item Addressing the central server reliance in FL through Blockchain's decentralized
+    infrastructure.
+  \item Enhancing trust, transparency, and security in FL systems using Blockchain's
+    consensus mechanisms and immutability.
+  \item Provide incentives for devices to partake in the federated learning process.
+\end{itemize}
+
+And some of the challenges include:
+\begin{itemize}
+  \item Computational and communication overhead due to Blockchain protocols.
+  \item Ensuring security and consistence of the gloabl model.
+\end{itemize}
+
+When discussing the challenges and advantages we will also take a look at existing
+research and how some of these problems are dealt with and how some advantages are successfully exploited.
+
+\paragraph{Proposing our own implementation}
+After listing implementative and theoretical challenges we will proceed to propose our own implementation
+of a federated learning system on a blockchain network.
+
+We will try to compare it with the research papers discussed over the course of the document and provide our
+own unique opinions and implementation choices ragarding topics with:
+\begin{itemize}
+  \item Outlining the network, consensus, and Blockchain layers to integrate the two
+    technologies effectively.
+  \item Exploring implementation choices, such as public versus private Blockchains,
+    consensus mechanisms, and the role of smart contracts.
+  \item Dealing with malicious updates in a robust manner.
+  \item Making the system communication efficient and address storage and availability challenges.
+\end{itemize}
+
+We will then proceed to evaluate our implementation and compare it to a classic client-server implementation
+and show the feasibility of blockchain integration.
+
+\paragraph{Contributing to Academic research}
+Saying that one of the aims of this document is to contribute to academic research may sound a bit pretentious
+as this is by no means a groundbreaking work. However, by gathering existing research and providing our own
+implementation and opinions on some relevant topics we hope that this document will be useful to someone
+looking for a starting point in this field.
+
+\paragraph{Conclusion}
+By achieving these objectives, the thesis endeavors to shed light on the transformative
+potential of combining Blockchain and Federated Learning, laying the groundwork for innovative
+solutions to contemporary challenges in privacy-preserving and secure collaborative learning.

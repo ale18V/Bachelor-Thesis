@@ -1,0 +1,45 @@
+{
+  "latex-workshop.latex.outDir": "%DIR%/build",
+  "latex-workshop.formatting.latex": "tex-fmt",
+  "latex-workshop.formatting.tex-fmt.path": "tex-fmt",
+  "latex-workshop.formatting.tex-fmt.args": ["--wrap", "120"],
+  "latex-workshop.view.pdf.viewer": "browser",
+  "latex-workshop.latex.tools": [
+    {
+      "name": "latexmk",
+      "command": "latexmk",
+      "args": [
+        "--shell-escape",
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-pdf",
+        "-outdir=%OUTDIR%",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "pdflatex",
+      "command": "pdflatex",
+      "args": [
+        "--shell-escape",
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "%DOC%"
+      ]
+    }
+  ],
+  "python.analysis.importFormat": "relative",
+  "mypy-type-checker.args": ["--config", "pyproject.toml"],
+  "mypy-type-checker.ignorePatterns": [
+    "**/site-packages/**/*.py",
+    ".vscode/*.py",
+    "**/generated/*.pyi"
+  ],
+  "flake8.ignorePatterns": [
+    "**/site-packages/**/*.py",
+    ".vscode/*.py",
+    "**/generated/*.pyi"
+  ]
+}

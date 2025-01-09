@@ -1,0 +1,68 @@
+\chapter{Federated Learning and Machine Learning} \label{chap:federated-learning}
+\section{Introduction to machine learning}
+One of the central topics of this document is Federated Learning, however, before introducing it in depth, we
+must first introduce the subject to which it belongs: machine learning.
+What is machine learning and what is its underlying problem? Machine
+learning is the discipline which seeks to answer the following
+question: \emph{"how can a computer improve based on experience?"}.
+
+There are three main branches of machine learning:
+\begin{enumerate}
+  \item Supervised learning
+  \item Unsupervised learning
+  \item Reinforcement learning
+\end{enumerate}
+
+Federated learning was originally born as a supervised learning technique, however recent work has been done to bring
+ito unsupervised \cite{UnsupervisedFL} and reinforcement learning \cite{ReinforcementFL}.
+A short summary of all three learning methods is the following:
+\begin{itemize}
+  \item Supervised learning about generalizing a dataset of examples to produce a general rule that can be
+    applied to new examples.
+  \item Unsupervised learning is about finding patterns and relationship between examples of the dataset.
+  \item Reinforcement Learning studies how well a machine is able to adapt to a dynamic environmnet based on
+    reward and penalties.
+    When the machine does 'well' it receives a reward, otherwise it recieves a penalty.
+\end{itemize}
+For the sake of this document we will only cover supervised learning in a little more depth.
+
+If the reader is interested in diving deeper into the topic of machine learning and gain a more thorough
+understanding of the techniques adopted and discussed here we suggest to take a look at \cite{MLBook}.
+
+\input{chapters/federated-learning/supervised-learning.tex}
+\clearpage
+
+\input{chapters/federated-learning/gradient-descent.tex}
+\clearpage
+
+\section{Introduction to Federated Learning}
+To \textit{federate} means "to join together under a central government or organization while keeping some
+local control" \cite{oxford_federate}.
+This principle forms the foundation of federated learning: uniting many independent devices under the
+coordination of a central server to collaboratively train a global machine learning model, all while ensuring
+that data remains decentralized and local to the devices.
+
+Federated learning represents a significant paradigm shift in the field of machine learning, distinct from
+both traditional and distributed approaches.
+\textbf{Traditional machine learning} methods often rely on a centralized architecture, where all data is
+collected and stored in a central server. This centralization simplifies the training process but raises
+concerns related to data privacy, security, and scalability when dealing with sensitive or large-scale datasets.
+
+\textbf{Distributed machine learning}, on the other hand, addresses scalability by distributing the
+computational workload across multiple nodes or servers. These nodes process subsets of data stored centrally
+or across a cluster. However, distributed learning still typically assumes that data can be transferred and
+aggregated freely, making it less suited for scenarios where privacy or data sovereignty is a primary concern.
+
+\textbf{Federated learning} bridges the gap between these approaches by introducing a decentralized training
+methodology (with respect to the data). In federated learning, data remains on the devices where it is
+generated (e.g., smartphones, IoT
+devices, or edge servers), and only model updates—such as gradients or parameters—are transmitted to the
+central server for aggregation. This design inherently enhances privacy and security, minimizes data
+movement, and opens opportunities for leveraging massive amounts of distributed data that were previously
+inaccessible under traditional paradigms.
+
+In this chapter, we will explore the mechanisms and architectures underpinning federated learning, starting
+with its foundational model, also called \textit{vanilla federated learning}, and explore alternative
+approaches such as integrating it with blockchain techonology.
+
+\input{chapters/federated-learning/vanilla-fl.tex}

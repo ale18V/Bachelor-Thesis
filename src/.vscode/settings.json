@@ -1,0 +1,6 @@
+{
+  "debugpy.debugJustMyCode": false,
+  "python.analysis.includeAliasesFromUserFiles": true,
+  "python.defaultInterpreterPath": "~/Code/tesi/.venv/bin/python",
+  "python.analysis.importFormat": "absolute"
+}

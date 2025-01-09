@@ -1,0 +1,345 @@
+\section{Proposed implementation}\label{chap:implementation}
+In \ref{sec:blockchain-fl} we discussed extensively about the pros and cons of blockchain and federated
+learning integration.
+We also mentioned the main challenges that arise when trying to combine these two technologies. We should be
+explicit on the fact that it is a non-goal of this project to
+deal with all, if any of them. The main goal of this project is to provide a working implementation of a
+federated learning combined with blockchain and compare the performance of it with client-server vanilla FL.
+However this does not mean that no effort has been put into trying to develop a robust solution.
+In particular, great care has been put into the design of the system to improve upon designs suggested in
+papers such as \cite{FlwrBC}, \cite{BlockFL}, \cite{VBFL}.
+In facts:
+\begin{enumerate}
+  \item The model proposed in \cite{FlwrBC} uses the ethereum blockchain to implement a reward system.
+    As mentioned in \ref{sec:bfl-implementation} storing the model and updates on a public chain would be
+    unreasonable, thus the models are cleverly stored on IPFS instead of on chain. However this makes
+    aggregating the updates on chain impossible so it still relied on a central server incurring in all
+    problems related to centralization.
+  \item The model proposed in \cite{BlockFL} defines a custom blockchain specific to federated learning. This
+    is the same path that will be taken in this project. However the article based the architecture on PoW consensus,
+    which is not suitable for a FL scenario as we argued in \ref{sec:bfl-implementation}.
+  \item The model proposed in \cite{VBFL} is very similar to the one proposed in this project. It is
+    basically a more featureful version of \cite{BlockFL}: it integrates a reputation system in the consensus
+    algorithm to minimize malicious updates to the model. The main problem is that it still relies on a
+    variation of PoW.
+
+\end{enumerate}
+
+The implementation presented here was thought to be a more efficient implementation of the last one of those articles.
+It still includes a reputation system but is based on a pure proof of stake consensus which substitutes the
+resource expensive PoW.
+To sum up, the main goals of this implementation are:
+\begin{enumerate}
+  \item To implement a fairly robust blockchain network specialized for a federated learning task.
+  \item To equip the blockchain network with a mechanism for validating updates so as to minimize the
+    impact of malicious nodes.
+  \item To make the blockchain operations as lightweight as possible, in order to be friendly to low-power devices.
+\end{enumerate}
+
+\subsection{Network layer}
+The network protocol was heavily inspired by Bitcoin's, which we discussed in \ref{sec:bitcoin-network}.
+For the sake of the experiment we left out the version exchange messages leaving the connection to be started
+by directly sharing known peers.
+The moment a node comes online it asks known peers to share the blockchain state so that it can synchronize
+with the network.
+As common in peer to peer networks we follow the \textit{gossip} protocol to share information about the
+blockchain: pending transactions and blocks are all broadcasted to all known peers.
+Akin to bitcoin we implemented persistent connections and a ping/pong messaging system to detect unhealthy peers.
+
+\subsection{Consensus layer}\label{sec:consensus}
+As far as the consensus algorithm is concerned, we chose to implement the Tendermint algorithm.
+This is because the algorithm is robust and lays on strong mathematical foundations \cite{Tendermint}.
+In particular, it is a byzantine fault tolerant algorithm, meaning that it can guarantee correct proceeding
+of the operations of the network even if some malicious nodes are present.
+
+We want to give a basic understanding of how the algorithm works. First thing first let's deine the network model.
+Suppose that each node of the network has a voting power proportional to its stake or reputation and the
+total voting power of the network is $n$.
+Let $f$ be the number such that $n = 3f + 1$, then the algorithm works as follows:
+
+\begin{enumerate}
+  \item \textbf{Proposal message}: A node is elected as block proposer and proposes a block; a round is started.
+  \item \textbf{Prevote message}: Nodes receive the block and cast votes in favour or against it depending on
+    whether they consider it as valid.
+  \item \textbf{Precommit message}: When a node receives at least $2f/3$ prevotes in favour of the block it
+    sends a precommit message and locks the chosen block.
+    It cannot vote for any other blocks in the same round.
+  \item \textbf{Commit}: When a node receives at least $2f/3$ precommits in favour of a block it adds it to the chain.
+  \item \textbf{New round}: If a block is not committed in a round a new round is started.
+\end{enumerate}
+
+The algorithm also implements timeouts in order not to incur into deadlocks. It is guaranteed that if at
+least $2f + 1$ nodes are honest the algorithm will always reach consensus.
+
+We refer the reader to \cite{Tendermint} if they're interested in a more technical explaination of the
+protocol and the proof of its correctness.
+
+\subsection{Blockchain layer}
+The blockchain layer is the core of the system. It is where the model updates and the reputation of the nodes
+are stored. The reputation of a node is determined by the amount of chain-native tokens it owns. These tokens
+can be seen as a form of currency. This currency is minted after successful updates of the model.
+
+The general overviow of the application-layer flow is the following:
+\begin{itemize}
+  \item \textbf{Model update request}: A node trains a model on its local dataset and wants to share this
+    update. It crafts a transaction
+    containing the update and broadcasts it to the network. This transaction is called an \textbf{update transaction}.
+  \item \textbf{Validation}: This transaction is stored inside the mempool of a validator. The validator
+    tests the update to see
+    whether it is malicious or low quality. If this is the case the update is discarded.
+  \item \textbf{Block creation and reward}: When one of the validators who received the update is chosen as
+    proposer, it gathers the transaction
+    along with all the other valid transactions inside a block. A \textbf{coinbase transaction} is also added
+    to it, in order to reward all the contributors.
+  \item \textbf{Consensus}: The block is then broadcasted to the network. The nodes of the chain will then
+    reach agreement on
+    whether to accept the block or not based on the consensus algorithm \cite{Tendermint}.
+\end{itemize}
+
+Let's dive into more details about the choises now.
+\subsubsection{Reward}
+Rewarding nodes with tokens provides an incentive mechanism to encourage participation in the network.
+This is one of the lackings of Vanilla FL as we discussed in \ref{sec:challenges-vanilla-fl} and we try to
+overcome it in this way in our implementation. Ideally we would want to reward nodes based on the quality of
+their update. For simplicity we suppose that the rewards are fixed in our system.
+
+In facts it is not trivial to determine the quality of an update: in contrast to centralized machine
+learning, federated learning participants dont't share a global testing dataset. Thus quality would have to
+be judged using local datasets.
+
+In this scenario a validator node may judge an update as very high quality whereas another one may judge it
+as barely acceptable.
+This would lead to consensus issues, because the former would decide to reward generously the contributor, whereas the
+latter would not. We cannot even decide to just leave the responsibility of judging the quality of the update
+to the single proposer, because this introduces bias in the reward system.
+
+\paragraph{Security}
+All transactions contain the public key (address) of the creator node and a signature to prove the ownership
+of the update (see \ref{sec:messages}).
+Participants of the network can be addressed by their public key, similarly to bitcoin
+\ref{table:bitcoin_output_format}.
+This guarantees integrity of messages exchanged with peers in the network and is essential to build a reputation system.
+
+Although this is a good start there is still a major flow in the proposed architecture. Signatures don't
+provide confidentiality and everyone can read signed data and re-sign it as theirs.
+This is a problem because a peer node can perform a \textbf{man-in-the-middle} attack on update transactions
+and steal the
+update by signing it with its own key. This is a problem that can be solved with a more sophisticated protocol or/and
+using more advanced cryptography such as commitments or homomorphic encryption. For the sake of this
+experiment we ignore this problem as we are not concerned with network-level attacks.
+
+\paragraph{Validators}
+The main idea behind having validator nodes is to provide a mechanism against malicious updates.
+As we stated already in \ref{subsec:challenges-blockchain-fl}, in a blockchain based on PoW, we cannot
+implement a network-wide validation mechanism, because asking every node to validate blocks with their own
+independent dataset would break the consensus algorithm. On the other hand if we were to delegate the
+validation to miners only, then  powerful attackers could easily craft malicious blocks.
+
+The solution to this problem is to incorporate a voting mechanism in the consensus algorithm. This is what
+has been done by choosing the Tendermint algorithm. If at least 2/3 of the votes of the network
+are casted in favour of a proposed block then it is valid.
+
+However, we don't want all nodes of the network to be held accountable for validation.
+This is because being a validator requires:
+\begin{enumerate}
+  \item Having an high quality validation dataset.
+  \item Having enough computational power to frequently validate transactions.
+  \item Being frequently available, otherwise the network would be stuck.
+\end{enumerate}
+The majority of federated learning devices doesn't satisfy all three of those requirements.
+Incidentally, restricting the number of validators contributes to making network convergence faster and is
+more communication efficient.
+
+If restricting the validators to a network subset we must also take care of prevenging malicious nodes from
+becoming validators however.
+This problem can be solved by implementing a reputation system based on the amount of tokens held by nodes.
+If we assume that malicious nodes will be penalized and not rewarded well over the course of the FL task then
+only honest nodes will own the amount of required tokens to become validators.
+
+Note that restricting the number of validators also secures the network against \textit{sybil attacks} (a
+  kind of attack where a malicious actor creates a large number of identities to gain
+control of the network.)
+
+\paragraph{Staking}
+In order to preventing validators from disrupting the network we require them to stake funds.
+This successfully prevents \textit{nothing at stake attacks}: ideally validators that misbehave should be punished by
+burning their stake, either entirely or partially. However, for the purpose of the experiment we did not implement it.
+
+In our network, a staking event is just a transaction where a node asks to stake some of its funds via a
+\textbf{stake transaction}.
+
+\paragraph{Block proposers}
+In order to prevent chaos and risks of forking only one amongst the set of validators is chosen to propose a
+block in a given round.
+This is also mandated by the consensus algorithm that we chose \ref{sec:consensus}.
+In our network the block propser is chosen with a deterministic random algorithm.
+This is done via seeding the RNG using the current block height and round number. \ref{lst:random-proposer}
+\begin{listing}\caption{Random proposer selection}\label{lst:random-proposer}
+  \begin{minted}{python3}
+def get_proposer(height: int, round: int, validators: set[bytes]):
+"""Returns the proposer for the given height and round."""
+    if not validators:
+        return None
+    random.seed(height + round)
+    return random.choice(sorted(validators))
+
+  \end{minted}
+\end{listing}
+
+\subsection{Technology stack}
+The implementation of the project was primarily carried out in Python, which is the predominant language in
+the field of machine learning. Python offers an extensive ecosystem of high-quality libraries, making it an
+ideal choice for tasks related to both federated learning and blockchain integration. For the machine
+learning component, we utilized PyTorch, a versatile and widely-adopted library that simplifies model
+development and training.
+
+For federated learning, we leveraged Flower, a Python library specifically designed to facilitate the
+implementation of traditional federated learning systems. While Flower excels in client-server-based
+architectures, integrating it with a blockchain network required modifications to its configuration. These
+adjustments were necessary to adapt the framework to a decentralized, peer-to-peer architecture.
+
+On the blockchain side, the network layer initially employed WebSocket communication. However, the
+asynchronous nature of WebSocket messaging presented challenges in ensuring reliable and consistent
+communication at the application level. To address these issues, we transitioned to using gRPC (Google Remote
+Procedure Call), a language-agnostic RPC framework that runs on top of HTTP/2.0. gRPC allows for efficient,
+bi-directional streaming of messages, with message formats defined using the Protocol Buffers syntax.
+
+While gRPC inherently follows a client-server paradigm, this limitation was overcome by designing each node
+to function as both a client and a server. This dual-role approach enabled seamless peer-to-peer
+communication while retaining the reliability and performance benefits of gRPC.
+
+\subsection{Messages and Data structures}\label{sec:messages}
+Here are the common data structures used in the network and blockchain layers:
+\begin{minted}[fontsize=\scriptsize]{proto}
+/** Peer addresses in form of host:port */
+message NetworkAddress {
+    string address = 1;
+}
+
+/** Block format */
+message Block {
+    BlockHeader header = 1;
+    BlockBody body = 2;
+}
+
+/** Block header contains metadata */
+message BlockHeader {
+    uint64 height = 1;
+    uint64 round = 4;
+    uint64 timestamp = 2;
+    bytes parent = 3;
+    bytes hash = 7;
+}
+
+/** Block body is a list of transactions */
+message BlockBody {
+    repeated Transaction transactions = 1;
+}
+
+/** General transaction format */
+message Transaction {
+    bytes public_key = 1;
+    bytes signature = 2;
+    uint32 timestamp = 3;
+    TransactionType type = 4;
+    TransactionData data = 5;
+}
+
+message TransactionData {
+    oneof body {
+    CoinbaseTransaction coinbase = 6;
+    StakeTransaction vote = 8;
+    UpdateTransaction update = 9;
+    }
+}
+
+enum TransactionType {
+    UPDATE = 1;
+    COINBASE = 2;
+    STAKE = 3;
+}
+
+/** A model update transaction */
+message UpdateTransaction {
+    bytes block = 2;
+    string data = 1;
+}
+
+message CoinbaseTransaction {
+    bytes address = 1;
+    uint64 quantity = 2;
+}
+
+message StakeTransaction {
+    bytes address = 1;
+    uint64 quantity = 2;
+}
+
+message StakeAddress {
+    bytes address = 1;
+    uint64 quantity = 2;
+}
+\end{minted}
+
+This is the RPC service definition:
+
+\begin{minted}[fontsize=\scriptsize]{proto}
+syntax = "proto3";
+service Node {
+  rpc AdvertisePeer(NetworkAddress) returns (google.protobuf.Empty) {};
+  rpc RequestPeers(google.protobuf.Empty) returns (RequestPeersResponse) {};
+  rpc AdvertiseTransaction(Transaction) returns (google.protobuf.Empty) {};
+  rpc ProposeBlock(ProposeBlockRequest) returns (google.protobuf.Empty) {};
+  rpc RequestBlock(BlockRequest) returns (BlockResponse) {};
+  rpc AdvertisePrevote(PrevoteMessage) returns (google.protobuf.Empty) {};
+  rpc AdvertisePrecommit(PrecommitMessage) returns (google.protobuf.Empty) {};
+  rpc RequestBlockchain(google.protobuf.Empty) returns (BlockchainMessage) {};
+  rpc RequestBalance(BalanceRequest) returns (BalanceResponse) {};
+  rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty) {};
+}
+
+message RequestPeersResponse {
+  repeated NetworkAddress addresses = 1;
+}
+
+message BlockchainMessage {
+  repeated Block blocks = 1;
+}
+
+message BalanceRequest {
+  optional bytes address = 1;
+}
+
+message BalanceResponse {
+  optional uint64 balance = 1;
+}
+
+message ProposeBlockRequest {
+  Block block = 1;
+  bool is_previous = 5;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+message PrevoteMessage {
+  optional bytes hash = 1;
+  uint64 height = 5;
+  uint64 round = 6;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+
+message PrecommitMessage {
+  optional bytes hash = 1;
+  uint64 height = 5;
+  uint64 round = 6;
+  bytes pubkey = 2;
+  bytes signature = 3;
+}
+message BlockRequest {
+  bytes hash = 1;
+}
+
+message BlockResponse {
+  optional Block block = 1;
+}
+\end{minted}

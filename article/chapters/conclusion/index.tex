@@ -1,0 +1,49 @@
+\phantomsection
+\chapter*{Conclusion}\label{chap:conclusion}\addcontentsline{toc}{chapter}{Conclusion}
+After all the topics discussed it's time to sum up and draw the conclusions.
+This thesis has explored the integration of Federated Learning and Blockchain, focusing on
+their potential to address critical challenges in privacy, security, and decentralization.
+Federated Learning facilitates collaborative model training without centralizing data, while Blockchain
+enhances trust through
+its decentralized and immutable ledger.
+
+\subsection*{Key Findings}
+\begin{itemize}
+  \item \textbf{Enhanced Security and Privacy}: Combining Federated Learning with Blockchain mitigates
+    reliance on a central
+    server, addressing privacy concerns and trust issues inherent in traditional FL systems.
+  \item \textbf{Improved Transparency and Trust}: Blockchain's transparency ensures model integrity, while
+    smart contracts and consensus mechanisms provide accountability.
+  \item \textbf{Scalability Challenges}: The integration introduces significant computational and
+    communication overhead, especially in environments with constrained resources.
+\end{itemize}
+
+\subsection*{Contributions}
+\begin{itemize}
+  \item A Blockchain-augmented FL framework was proposed, demonstrating its feasibility through both
+    theoretical analysis and practical implementation.
+  \item Comparative evaluations against vanilla federated learning revealed that using blockchain is a valid
+    choice as it does not significantly impact the performance of the learning task.
+\end{itemize}
+
+\subsection*{Remarks}
+In our experiment we have dealt with a very simple dataset of limited size and complexity. Furthermore we
+only used ten nodes and the communication happened not even on a local network but via the loopback address
+of the machine. While the results are promising, they should be taken with a grain of salt as they may not be
+representative of
+real-world scenarios.
+
+\subsection*{Future Directions}
+When discussing the challenges we put at stake many problems at once but only addressed few of them in our
+implementation.
+
+Furthermore we have not dealt with other practical limitations. For instance if we're interested in deploying
+a real-world Blockchain FL system we would have to consider the fact that most user-owned devices have
+access to the internet only via NAT and therefore are not able to accept inbound connections. This would make
+the idea of using a peer to peer network unfeasible.
+
+Another very important problem we have not dealt with is storage scalability. As we have highlited in
+\ref{subsec:challenges-blockchain-fl}
+storing all the updates of the model on the blockchain can outgrow storage capabilities of FL participants very fast.
+
+Our conclusion is that the integration of FL and Blockchain is promising but remains in its early stages.

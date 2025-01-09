@@ -1,0 +1,45 @@
+\section{Introduction to Blockchain}
+Nowadays blockchain has become a buzzword in the tech industry and it gets thrown around in many context just
+to generate hype. Many people view it as something mysterious and cryptic.
+However the core idea behind the technology is very simple: a blockchain is just a linked list of blocks
+where each new block can only be appended at the end of the list. The data can represent anything, from
+financial transactions to medical records: as a matter of fact, the first use case of
+blockchain was timestamping documents.
+
+The definition we just gave is very simple but intuitive. However when we talk about blockchain we usually
+refer to the ecosystem and philosophy surround it as well. A more precise definition is the following:
+\begin{quote}
+  \it A blockchain is a decentralized and distributed
+  digital ledger that records \textit{transactions} across multiple
+  computers in a way that ensures the security, transparency, and immutability of the data.
+\end{quote}
+
+We use to call transactions the events that are recorded in the chain even though they may not necessarily be
+associated with finance. Each transaction on a blockchain is grouped into a \textbf{block} which is linked to
+previous blocks, forming the append-only linked list.
+
+The core idea of a blockchain is that once a block is validated and added to the chain, it is very hard to
+alter or delete it, making the blockchain highly resistant to tampering and fraud.
+This is made possible via a consensus mechanism \ref{sec:consensus}, which is a process that multiple nodes
+(computers) follow to agree on the validity of blocks before adding them to the chain.
+
+Blockchain technology enables secure, peer-to-peer transactions without the need for a central authority,
+such as a bank or government, because each participant in the network holds a copy of the entire blockchain.
+This decentralized structure is what ensures data integrity, as any changes to a transaction would require
+the consensus of the majority of the network.
+The transparency of the blockchain means that all participants can see the transaction history, making it a
+trusted source for verifying information.
+
+Originally developed as the technology underpinning cryptocurrencies like Bitcoin, blockchain has since
+expanded to numerous applications beyond finance, including supply chain management, voting systems, and healthcare.
+As we will see in \ref{sec:smart-contracts}, smart contracts — programmable agreements that automatically execute
+when predefined conditions are met — are another innovative use of blockchain, as they enable automated and
+enforceable contracts without intermediaries.
+
+Blockchain technology is still a field of ongoing research and, while the core principles have to remain
+consistent with what we stated above, there are many diverse implementation paths that can be taken when
+building a network based on a blockchain.
+In order to provide a foundational understanding of state of the technology and its limitations, we will
+explore the features and characteristics of the biggest and first implemented public blockchain: Bitcoin.
+This analysis will also be beneficial to the understanding of the project implementation as we will see in
+\ref{chap:implementation}.

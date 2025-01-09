@@ -1,0 +1,39 @@
+\section{Blockchain Classification}\label{sec:blockchain-classification}
+\subsection{Public vs Private Blockchains}
+Public blockchains are open to anyone, providing a high level of decentralization and
+transparency. However, this also implies higher costs associated with blockchain usage and also
+increases the risk of incurring into malicious actors, as anyone can participate without prior verification.
+
+In contrast, private blockchains restrict access to authorized participants, allowing more control and accountability.
+Private blockchains are often preferable for enterprise applications, where security and control
+are paramount, and accountability can be enforced among known participants. Being specialized for a dedicated task,
+the costs associated with blockchain usage are also lower.
+
+\subsection{Consensus Mechanisms}\label{sec:consensus}
+Consensus mechanisms are algorithms which coordinate the participants of the chain towards reaching agreement
+on the global state of the network. Different consensus mechanisms have varying impacts on performance,
+energy consumption, and overall network security.
+
+Proof of Work (PoW) was the first consensus mechanisms to be adopted. In PoW, miners
+solve cryptographic puzzles to validate transactions, which requires significant computational power and
+energy. While PoW ensures security, it is energy-intensive and can cause delays due to mining time, as well
+as increase the risk of blockchain forks. These factors limit its scalability and efficiency for real-time applications.
+
+Proof of Stake (PoS) addresses some of PoW's shortcomings by selecting validators based on the amount of
+cryptocurrency they are willing to stake. PoS reduces energy consumption and lowers forking risks since
+validators are financially incentivized to act honestly. Additionally, PoS networks tend to be more scalable
+and faster.
+
+Consortium-based mechanisms, often used in permissioned blockchains, involve a select group of trusted
+entities validating transactions. These systems are more energy-efficient than PoW and offer faster
+transaction processing due to fewer validators. This mechanism is the most energy efficient and scalable out
+of the three however it comes with the downside of being more centralized.
+
+\subsection{Smart Contract-Based Platforms}\label{sec:smart-contracts}
+While custom blockchains allow for greater control and optimization specific to a use case, smart contracts
+provide a way to leverage existing, widely adopted blockchain platforms like Ethereum. Smart contracts are
+self-executing contracts with the terms directly written into code. This makes them ideal for automating
+tasks such as managing transactions and coordinating activities in decentralized applications. They allow
+federated learning frameworks to be easily deployed across different blockchains, as long as those platforms
+support similar contract functionality. This compatibility enables easier integration with established
+blockchain networks and reduces the need for building infrastructure from scratch.

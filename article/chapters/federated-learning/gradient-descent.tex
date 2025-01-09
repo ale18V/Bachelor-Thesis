@@ -1,0 +1,119 @@
+\section{Gradient Descent Algorithm} \label{sec:gradient-descent}
+Consider a function \( f : \mathbb{R}^{n} \to \mathbb{R} \) at least
+of class \(C^{1}\), that we want to minimize.
+In case of simple functions, it is possible to accomplish this task with precise mathematical methods.
+As an example consider the function \( f(x) = x^{2} \).
+The minimum can be precisely found by studying its first and second derivatives.
+
+However this is not always possible or practical to do.
+This is often the case in machine learning where the loss functions we want to minimize are very complex.
+
+That's why optimization is usually performed via iterative methods, the most common of which is the gradient
+descent algorithm.
+There are multiple variations, but the general concept is to start somewhere in the parameter space (e.g
+$\mathbb R^n$), keep \textit{"moving"} towards the direction of fastest decrease and stop once a satisfactory
+point of minimum is near.
+
+The direction of fastest decrease of a differentiable function is given by the negative gradient of the function.
+This is true because by definition:
+\[
+  \frac{\partial f}{\partial v}(\vec x) = \vec \nabla f(\vec x) \cdot \vec v = \| \vec \nabla f(\boldsymbol
+  x)\| \cdot \|\vec v\| \cos \theta
+\]
+Thus the vector which minimizes the directional derivative is the one in the opposite direction of the
+gradient (i.e. for which $\theta = -180^{\circ}$).
+
+The classic gradient descent algorithm works as follows:
+
+\begin{algorithmic}[1]
+  \State Pick a starting vector \( \vec{w} \) and a step size \( \eta \).
+
+  \While{not convergence}
+  \State \( g \gets \nabla f(\vec{w}) \)
+  \State \( \vec{w} \gets \vec{w} - \eta g \)
+  \EndWhile
+\end{algorithmic}
+
+If the step size is too big, the minimum might be skipped; if it is
+too small, the algorithm might take a long time to converge.
+Usually, the step size is chosen adaptively.
+
+\textbf{When is convergence reached?}
+\begin{itemize}
+  \item The gradient is near to zero.
+  \item The objective function is not changing by more than a certain
+    threshold between steps.
+\end{itemize}
+
+\subsection{Variations}
+Gradient descent techniques are a field of ongoing research thus it would not be feasible to cover all the variations.
+However we consider the case where the function \( f \) is a sum of functions \( f(\vec{w}) =
+\sum_{i=1}^{m} f_{i}(\vec{w}) \).
+In this case there are two canonical variations of the gradient descent algorithm: the batch and the
+stochastic gradient descent.
+
+\subsubsection*{Batch Gradient Descent} \label{sec:batch-gradient-descent}
+The batch gradient descent is simply the same gradient descent algorithm described above with the difference that
+the gradient $\nabla f(\vec{w})$ is calculated via linear superposision of the gradients of the single
+functions $f_{i}(\vec{w})$:
+\[
+  \nabla f(\vec{w}) = \sum_{i=1}^{m} \nabla f_{i}(\vec{w})
+\]
+So the algorithm becomes:
+
+\begin{algorithmic}[1]
+  \While{not minimum}
+  \State \( g = 0 \)
+  \For{\( i = 1 \) to \( m \)}
+  \State \( g \gets g + \nabla f_i(\vec{w}) \)
+  \EndFor
+  \State \( \vec{w} -= \eta g \)
+  \EndWhile
+\end{algorithmic}
+
+This kind of algorithm is an \textit{offline}, as \( \vec{w}
+\) is changed only at the end.
+
+\subsubsection*{Stochastic Gradient Descent} \label{sec:stochastic-gradient-descent}
+The stochastic variation of the gradient descent is different in that \( \vec{w} \) is updated as soon as
+$\nabla f_{i}(\vec w)$ is computed, without waiting to aggregate the gradients to compute \( \nabla \vec f(\vec w) \).
+In contrast to the previous, this is an \textit{online} algorithm.
+
+\begin{algorithmic}[1]
+  \While{not minimum}
+  \State Shuffle points
+  \For{\( i = 1 \) to \( m \)}
+  \State \( g = \nabla f_i(\vec{w}) \)
+  \State \( \vec{w} -= \eta g \)
+  \EndFor
+  \EndWhile
+\end{algorithmic}
+
+This version bounces back and forth much more than the batch version.
+For this reason, it is useful when we are far from the minimum but not as effective near the minimum.
+In fact, it is hard to figure out when to stop using this algorithm.
+The reader may have noticed that we shuffle the points here, unlike in the other version.
+This is because we might get stuck in a loop otherwise.
+
+\subsubsection*{Mini-batch Gradient Descent}\label{sec:minibatch-gradient-descent}
+Mini-batch gradient descent is a blend between the two previous methods.
+We split the data into small batches and compute the gradient of the loss function on each batch, then we
+update the weights.
+This is the pseudocode:
+
+\begin{algorithmic}[1]\label{alg:minibatch-gradient-descent}
+  \State $B$ is the batch size
+  \While{not minimum}
+    \State Shuffle points
+    \For{\( i = 1 \) to \( m \) with step \( B \)}
+      \For{\( j = i \) to  \( (i + B) \)}
+        \State \( g = \nabla f_j(\vec{w}) \)
+        \State \( \vec{w} \gets \vec w - \eta g \)
+      \EndFor
+    \EndFor
+  \EndWhile
+\end{algorithmic}
+
+The reader may notice that this is a more general version of the two algorithms presented before.
+As a matter of fact, if we set $B = 1$ we get the stochastic gradient descent, 
+while if we set $B = m$ we get the batch gradient descent.

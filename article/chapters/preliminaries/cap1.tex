@@ -1,0 +1,77 @@
+\section*{Titolo cap}\label{chap:introduction}
+
+In recent years, advancements in distributed computing and decentralized technologies have reshaped the
+landscape of machine learning and data processing. This document explores the intersection of two
+groundbreaking paradigms: Federated Learning (FL) and Blockchain. Each of these fields has garnered
+significant attention for its unique potential — federated learning for enabling collaborative model training
+without centralized data aggregation, and blockchain for providing decentralized governance and immutable ledgers
+with robust security guarantees.
+
+\section{Federated Learning and Blockchain}
+
+Federated learning is a decentralized approach to training machine learning models collaboratively across
+multiple devices or nodes while keeping data local to each participant. Originally developed to address
+privacy concerns, FL has found applications in domains such as healthcare, mobile devices, and IoT, where
+sensitive data remains confined to the edge devices that generate it. However, FL is not without its
+challenges. We will give a brief introduction to machine learning in \ref{chap:machine-learning}
+as a preliminary before introducing federated learning in \ref{chap:federated-learning}.
+
+Blockchain, on the other hand, is a decentralized ledger technology that ensures secure and immutable
+decentralized data storage and trustless interactions among participants.
+First popularized by cryptocurrencies such as Bitcoin, blockchain has since evolved to support a wide range
+of use cases, including supply chain management, smart
+contracts, and secure data sharing. We will delve into the fundamentals of this technology in chapter \ref{chap:blockchain}.
+
+\section{Combining Federated Learning and Blockchain}
+
+The possibility of integrating blockchain with federated learning has sparked interest in the research community as a
+means to address some of the inherent limitations of the paradigm.
+Federated learning's reliance on a central server for model aggregation introduces risks of a single point of failure
+and trust issues among participants.
+Blockchain's decentralized nature and consensus mechanisms can solve this problem among others, such as
+ensuring model integrity and fairness in participation. However this comes with its own set of challenges,
+mostly communication, storage and (depending on the underlying mechanism of the blockchain, also computation) overhead.
+We will delve into this topic in \ref{sec:blockchain-fl}
+
+Integrating blockchain into federated learning systems presents unique challenges. These include the
+computational and communication overhead introduced by blockchain protocols, ensuring scalability in systems
+with millions of devices, and aligning the asynchronous nature of federated learning with blockchain's
+consensus requirements. Despite these hurdles, the potential benefits—such as enhanced security,
+transparency, and trust—make this integration a promising avenue of research.
+
+\section{Contributions and Objectives}
+
+This document aims to explore the feasibility and practicality of implementing a federated learning system on
+a blockchain network. The contributions of this work are threefold:
+
+\begin{itemize}
+  \item \textbf{Conceptual Exploration:} We investigate the theoretical basis and potential synergies between
+    federated learning and blockchain technologies.
+  \item \textbf{Implementation:} We present an implementation of a federated learning system underpinned by
+    blockchain, addressing key challenges such as communication efficiency, scalability, and security.
+  \item \textbf{Comparative Analysis:} We compare our implementation with existing solutions from the
+    literature, highlighting its strengths and identifying areas for future improvement.
+\end{itemize}
+
+Through these contributions we aim to provide an understanding of how and why federated learning could be
+integrated with blockchain technology and highlight potential challanges.
+
+\section{Structure of the Document}
+
+The remainder of this document is organized as follows:
+\begin{itemize}
+  \item Chapter \ref{chap:blockchain} delves into the fundamentals of blockchain technology, examining its
+    mechanisms, benefits, and limitations, focusing on the Bitcoin network as a case study.
+
+  \item Chapter \ref{chap:machine-learning} is a very basic introduction to machine learning, which
+    introduces some topics and terminology relevant to federated learning.
+  \item Chapter \ref{chap:federated-learning} introduces the principles of federated learning, its
+    architecture, and its applications. Specifically, in \ref{sec:vanilla-fl} we explore the original
+    client-server model, whereas in \ref{sec:blockchain-fl} we explore blockchain integration.
+  \item Chapter \ref{chap:implementation} presents the proposed implementation of a federated learning system
+    on a blockchain network.
+  \item Chapter \ref{chap:evaluation} compares our implementation to existing solutions, discussing its
+    effectiveness and scalability.
+  \item Finally, Chapter \ref{chap:conclusion} concludes the document, summarizing findings and proposing
+    directions for future research.
+\end{itemize}
