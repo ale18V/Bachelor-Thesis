@@ -199,7 +199,9 @@ class Tendermint(StateMachine):
             if self.context.height == 1 and self.context.round == 0:
                 # Wait other nodes when starting the chain
                 try:
-                    await self.loop.run_in_executor(ThreadPoolExecutor(max_workers=1), input, "Press enter to proceed")
+                    await self.loop.run_in_executor(
+                        ThreadPoolExecutor(max_workers=1), input, "Press ENTER when all nodes have connected"
+                    )
                     print("Proceeding")
                 except Exception as e:
                     self.logger.info(f"Stopping {e}")

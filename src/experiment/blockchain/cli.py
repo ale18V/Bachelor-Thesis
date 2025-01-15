@@ -30,9 +30,25 @@ def run_participant(id: int, port: int, malicious: bool, validator: int | None) 
 
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", is_flag=True, default=True, help="Run/Don't run the bootstrap node")
-@click.option("--plot-all", is_flag=True, default=False, help="Plot metrics for each participant")
-@click.option("--malicious", is_flag=True, default=False, help="Run the experiment with malicious nodes")
-def cli(bootstrap: bool, plot_all: bool, malicious: bool):
+@click.option(
+    "--plot-all",
+    is_flag=True,
+    default=False,
+    help="Plot metrics for each participant. Plots will be saved in $CWD/blockchain-i.png",
+)
+@click.option(
+    "--malicious/--no-malicious",
+    is_flag=True,
+    default=False,
+    help="Run the experiment with some malicious nodes (see config.py)",
+)
+@click.option(
+    "--validators/--no-validators",
+    is_flag=True,
+    default=True,
+    help="Run the experiment with some validator nodes (see config.py)",
+)
+def cli(bootstrap: bool, plot_all: bool, malicious: bool, validators: bool):
     if bootstrap:
         bootstrap_node = BootstrapNode()
 
@@ -45,7 +61,7 @@ def cli(bootstrap: bool, plot_all: bool, malicious: bool):
     )
     validator_participants = utils.get_validators_ids(
         config.NUM_NODES, malicious_participants, seed, config.NUM_VALIDATORS
-    )
+    ) if validators else []
     print(f"Malicious participants: {malicious_participants}")
     print(f"Validator participants: {validator_participants}")
 

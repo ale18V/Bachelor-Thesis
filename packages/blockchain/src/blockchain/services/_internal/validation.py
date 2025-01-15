@@ -22,7 +22,8 @@ class ValidationService(AbstractValidationService):
             map(
                 lambda el: el[0],
                 filter(
-                    lambda el: not bool(el[1]), zip(update_txs, self.validate(map(lambda tx: tx.data.update, update_txs)))
+                    lambda el: not bool(el[1]),
+                    zip(update_txs, self.validate(map(lambda tx: tx.data.update, update_txs))),
                 ),
             )
         )

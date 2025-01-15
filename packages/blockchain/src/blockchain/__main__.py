@@ -12,7 +12,9 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--web-gui/--no-web-gui", default=False, help="Start the web GUI")
+@click.option(
+    "--web-gui/--no-web-gui", default=False, help="Start the web GUI on port 8080. Routes are /blockchain and /peers"
+)
 def bootstrap(web_gui: bool) -> None:
     """
     Start a bootstrapping node.
@@ -28,7 +30,7 @@ def bootstrap(web_gui: bool) -> None:
 @click.argument("port", type=int, default=DEFAULT_PORT)
 @click.argument("peers", nargs=-1)
 @click.option("--become-validator", is_flag=True, default=False, help="Become a validator node")
-@click.option("--private-key", type=str, default=None, help="Private key to use (hex)")
+@click.option("--private-key", type=str, default=None, help="Private key to use (in hex)")
 def run(port: int, peers: list[str], become_validator: bool, private_key: str) -> None:
     """
     Run a node of the blockchain.
